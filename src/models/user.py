@@ -17,9 +17,9 @@ class User(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     total_downloads: Mapped[int] = mapped_column(Integer, default=0)
 
-    subscriptions = relationship("Subscription", back_populates="user")
+    subscriptions = relationship("Subscription", back_populates="user", foreign_keys="Subscription.user_id")
     downloads = relationship("Download", back_populates="user")
-    payment_requests = relationship("PaymentRequest", back_populates="user")
+    payment_requests = relationship("PaymentRequest", back_populates="user", foreign_keys="PaymentRequest.user_id")
 
     def is_premium_at(self, moment: datetime | None = None) -> bool:
         now = moment or datetime.now(UTC)
