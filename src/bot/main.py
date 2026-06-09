@@ -1,0 +1,35 @@
+import asyncio
+
+from aiogram import Bot, Dispatcher
+
+from core.config import get_settings
+from core.logging import configure_logging
+from database.session import create_engine, create_session_factory
+from handlers.start import router as start_router
+from middlewares.database import DatabaseSessionMiddleware
+from scheduler.setup import setup_scheduler
+
+
+async def main() -> None:
+    settings = get_settings()
+    configure_logging(settings.log_level)
+
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    bot = Bot(token=settings.bot_token)
+    dispatcher = Dispatcher(settings=settings)
+    dispatcher.update.middleware(DatabaseSessionMiddleware(session_factory))
+    dispatcher.include_router(start_router)
+
+    scheduler = setup_scheduler(bot, session_factory, settings)
+    scheduler.start()
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        scheduler.shutdown(wait=False)
+        await bot.session.close()
+        await engine.dispose()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
