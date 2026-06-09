@@ -34,7 +34,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["bot*", "core*", "database*", "models*", "repositories*", "services*", "handlers*", "middlewares*", "keyboards*", "scheduler*", "utils*"]
+include = ["admin*", "bot*", "core*", "database*", "models*", "repositories*", "services*", "handlers*", "middlewares*", "keyboards*", "scheduler*", "utils*"]
 
 [tool.ruff]
 target-version = "py312"

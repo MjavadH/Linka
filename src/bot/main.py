@@ -1,7 +1,10 @@
 import asyncio
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 
+from admin.router import create_admin_router
 from core.config import get_settings
 from core.logging import configure_logging
 from database.session import create_engine, create_session_factory
@@ -16,9 +19,10 @@ async def main() -> None:
 
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
-    bot = Bot(token=settings.bot_token)
+    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dispatcher = Dispatcher(settings=settings)
     dispatcher.update.middleware(DatabaseSessionMiddleware(session_factory))
+    dispatcher.include_router(create_admin_router(settings))
     dispatcher.include_router(start_router)
 
     scheduler = setup_scheduler(bot, session_factory, settings)

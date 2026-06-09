@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     file_delete_after_seconds: int = Field(default=3600, ge=60)
     scheduler_interval_seconds: int = Field(default=30, ge=5)
     broadcast_rate_limit_per_second: int = Field(default=20, ge=1, le=30)
+    broadcast_batch_size: int = Field(default=100, ge=1)
+    premium_default_duration_days: int = Field(default=30, ge=1)
     log_level: str = "INFO"
 
     @field_validator("admin_telegram_ids", mode="before")
