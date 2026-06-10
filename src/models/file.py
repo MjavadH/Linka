@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
@@ -24,6 +25,7 @@ class File(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption_entities: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -46,8 +48,11 @@ class FileVariant(Base):
     telegram_file_unique_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     archive_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     archive_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    media_type: Mapped[str] = mapped_column(String(50), default="document")
     filename: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption_entities: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     access_level: Mapped[FileAccessLevel] = mapped_column(Enum(FileAccessLevel), default=FileAccessLevel.FREE)

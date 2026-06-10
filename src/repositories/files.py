@@ -12,8 +12,10 @@ PAGE_SIZE = 5
 
 
 class FileRepository(BaseRepository[File]):
-    async def create(self, title: str, description: str | None = None) -> File:
-        file = File(title=title, description=description)
+    async def create(
+        self, title: str, description: str | None = None, caption_entities: list[dict[str, object]] | None = None
+    ) -> File:
+        file = File(title=title, description=description, caption_entities=caption_entities)
         self.session.add(file)
         await self.session.flush()
         return file
@@ -63,6 +65,25 @@ class FileRepository(BaseRepository[File]):
         )
         return [(row[0], int(row[1]), int(row[2])) for row in result.all()], total
 
+    async def update_metadata(
+        self,
+        file_id: int,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        caption_entities: list[dict[str, object]] | None = None,
+    ) -> File | None:
+        file = await self.get_by_id(file_id)
+        if file is None:
+            return None
+        if title is not None:
+            file.title = title
+        if description is not None:
+            file.description = description or None
+            file.caption_entities = caption_entities
+        await self.session.flush()
+        return file
+
     async def soft_delete(self, file_id: int) -> None:
         await self.session.execute(update(File).where(File.id == file_id).values(is_active=False))
         await self.session.execute(
@@ -98,7 +119,10 @@ class DeepLinkRepository(BaseRepository[DeepLink]):
         now = datetime.now(UTC)
         result = await self.session.execute(
             select(DeepLink)
-            .options(selectinload(DeepLink.file), selectinload(DeepLink.variant))
+            .options(
+                selectinload(DeepLink.file),
+                selectinload(DeepLink.variant).selectinload(FileVariant.file),
+            )
             .where(
                 DeepLink.token == token,
                 DeepLink.is_active.is_(True),
@@ -125,6 +149,12 @@ class DeepLinkRepository(BaseRepository[DeepLink]):
         )
         return list(result.scalars().all())
 
+    async def disable_for_variant(self, variant_id: int) -> None:
+        await self.session.execute(
+            update(DeepLink).where(DeepLink.file_variant_id == variant_id).values(is_active=False)
+        )
+        await self.session.flush()
+
     async def disable_for_file(self, file_id: int) -> None:
         await self.session.execute(
             update(DeepLink).where(DeepLink.file_id == file_id).values(is_active=False)
@@ -144,7 +174,10 @@ class FileVariantRepository(BaseRepository[FileVariant]):
         telegram_file_unique_id: str | None,
         archive_chat_id: int | None,
         archive_message_id: int | None,
+        media_type: str,
         filename: str | None,
+        caption: str | None,
+        caption_entities: list[dict[str, object]] | None,
         file_size: int | None,
         mime_type: str | None,
         is_premium: bool,
@@ -159,13 +192,59 @@ class FileVariantRepository(BaseRepository[FileVariant]):
             telegram_file_unique_id=telegram_file_unique_id,
             archive_chat_id=archive_chat_id,
             archive_message_id=archive_message_id,
+            media_type=media_type,
             filename=filename,
             file_size=file_size,
             mime_type=mime_type,
+            caption=caption,
+            caption_entities=caption_entities,
             is_premium=is_premium,
             access_level=access_level,
         )
         self.session.add(variant)
+        await self.session.flush()
+        return variant
+
+    async def update_metadata(
+        self,
+        variant_id: int,
+        *,
+        quality: str | None = None,
+        is_premium: bool | None = None,
+        storage_key: str | None = None,
+        telegram_file_id: str | None = None,
+        archive_chat_id: int | None = None,
+        archive_message_id: int | None = None,
+        caption: str | None = None,
+        caption_entities: list[dict[str, object]] | None = None,
+    ) -> FileVariant | None:
+        variant = await self.get_by_id(variant_id)
+        if variant is None:
+            return None
+        if quality is not None:
+            variant.quality = quality
+        if is_premium is not None:
+            variant.is_premium = is_premium
+            variant.access_level = FileAccessLevel.PREMIUM if is_premium else FileAccessLevel.FREE
+        if storage_key is not None:
+            variant.storage_key = storage_key
+        if telegram_file_id is not None:
+            variant.telegram_file_id = telegram_file_id or None
+        if archive_chat_id is not None:
+            variant.archive_chat_id = archive_chat_id
+        if archive_message_id is not None:
+            variant.archive_message_id = archive_message_id
+        if caption is not None:
+            variant.caption = caption or None
+            variant.caption_entities = caption_entities
+        await self.session.flush()
+        return variant
+
+    async def soft_delete(self, variant_id: int) -> FileVariant | None:
+        variant = await self.get_by_id(variant_id)
+        if variant is None:
+            return None
+        variant.is_active = False
         await self.session.flush()
         return variant
 

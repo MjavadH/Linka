@@ -10,3 +10,8 @@ class AdminFileStates(StatesGroup):
     waiting_for_variant_upload = State()
     waiting_for_variant_quality = State()
     waiting_for_variant_premium = State()
+    waiting_for_edit_title = State()
+    waiting_for_edit_caption = State()
+    waiting_for_edit_variant_quality = State()
+    waiting_for_edit_variant_caption = State()
+    waiting_for_edit_variant_storage = State()

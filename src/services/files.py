@@ -23,8 +23,25 @@ class FileService:
         self.files = files
         self.deep_links = deep_links
 
-    async def create_file(self, title: str, description: str | None = None) -> File:
-        return await self.files.create(title=title, description=description)
+    async def create_file(
+        self,
+        title: str,
+        description: str | None = None,
+        caption_entities: list[dict[str, object]] | None = None,
+    ) -> File:
+        return await self.files.create(title=title, description=description, caption_entities=caption_entities)
+
+    async def update_file(
+        self,
+        file_id: int,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        caption_entities: list[dict[str, object]] | None = None,
+    ) -> File | None:
+        return await self.files.update_metadata(
+            file_id, title=title, description=description, caption_entities=caption_entities
+        )
 
     async def get_file(self, file_id: int) -> File | None:
         return await self.files.get_by_id(file_id)
@@ -62,9 +79,12 @@ class FileVariantService:
             telegram_file_unique_id=stored.file_unique_id,
             archive_chat_id=stored.archive_chat_id,
             archive_message_id=stored.archive_message_id,
+            media_type=stored.media_type,
             filename=stored.filename,
             file_size=stored.file_size,
             mime_type=stored.mime_type,
+            caption=stored.caption,
+            caption_entities=stored.caption_entities,
             is_premium=is_premium,
             access_level=FileAccessLevel.PREMIUM if is_premium else FileAccessLevel.FREE,
         )
@@ -87,12 +107,46 @@ class FileVariantService:
             telegram_file_unique_id=stored.file_unique_id,
             archive_chat_id=stored.archive_chat_id,
             archive_message_id=stored.archive_message_id,
+            media_type=stored.media_type,
             filename=stored.filename,
             file_size=stored.file_size,
             mime_type=stored.mime_type,
+            caption=stored.caption,
+            caption_entities=stored.caption_entities,
             is_premium=is_premium,
             access_level=FileAccessLevel.PREMIUM if is_premium else FileAccessLevel.FREE,
         )
+
+    async def update_variant(
+        self,
+        variant_id: int,
+        *,
+        quality: str | None = None,
+        is_premium: bool | None = None,
+        storage_key: str | None = None,
+        telegram_file_id: str | None = None,
+        archive_chat_id: int | None = None,
+        archive_message_id: int | None = None,
+        caption: str | None = None,
+        caption_entities: list[dict[str, object]] | None = None,
+    ) -> FileVariant | None:
+        return await self.variants.update_metadata(
+            variant_id,
+            quality=quality,
+            is_premium=is_premium,
+            storage_key=storage_key,
+            telegram_file_id=telegram_file_id,
+            archive_chat_id=archive_chat_id,
+            archive_message_id=archive_message_id,
+            caption=caption,
+            caption_entities=caption_entities,
+        )
+
+    async def delete_variant(self, variant_id: int, links: DeepLinkRepository) -> FileVariant | None:
+        variant = await self.variants.soft_delete(variant_id)
+        if variant is not None:
+            await links.disable_for_variant(variant_id)
+        return variant
 
     async def get_file_variants(self, file_id: int) -> list[FileVariant]:
         return await self.variants.list_by_file(file_id)

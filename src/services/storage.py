@@ -23,6 +23,9 @@ class StoredFile:
     file_unique_id: str | None
     archive_chat_id: int
     archive_message_id: int
+    media_type: str
+    caption: str | None
+    caption_entities: list[dict[str, object]] | None
     filename: str | None
     file_size: int | None
     mime_type: str | None
@@ -82,6 +85,9 @@ class TelegramStorageProvider:
             file_unique_id=media.file_unique_id,
             archive_chat_id=self.archive_chat_id,
             archive_message_id=archived.message_id,
+            media_type=_media_type(message),
+            caption=message.caption,
+            caption_entities=_caption_entities(message),
             filename=getattr(media, "file_name", None),
             file_size=media.file_size,
             mime_type=media.mime_type,
@@ -108,6 +114,8 @@ class TelegramStorageProvider:
             errors.append("missing archive chat id")
         if variant.archive_message_id is None:
             errors.append("missing archive message id")
+        if not variant.media_type:
+            errors.append("missing media type")
         return StorageValidationResult(is_valid=not errors, errors=tuple(errors))
 
 
@@ -165,3 +173,17 @@ def build_storage_service(bot: Bot, archive_chat_id: int | None) -> StorageServi
 
 def _extract_media(message: Message) -> Document | Video | Audio | None:
     return message.document or message.video or message.audio
+
+
+def _media_type(message: Message) -> str:
+    if message.video is not None:
+        return "video"
+    if message.audio is not None:
+        return "audio"
+    return "document"
+
+
+def _caption_entities(message: Message) -> list[dict[str, object]] | None:
+    if not message.caption_entities:
+        return None
+    return [entity.model_dump(mode="json", exclude_none=True) for entity in message.caption_entities]

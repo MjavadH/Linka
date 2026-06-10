@@ -8,8 +8,10 @@ from repositories.base import BaseRepository
 
 
 class TemporaryMessageRepository(BaseRepository[TemporaryMessage]):
-    async def create(self, chat_id: int, message_id: int, delete_after: datetime) -> TemporaryMessage:
-        item = TemporaryMessage(chat_id=chat_id, message_id=message_id, delete_after=delete_after)
+    async def create(
+        self, chat_id: int, message_id: int, delete_at: datetime, user_id: int | None = None
+    ) -> TemporaryMessage:
+        item = TemporaryMessage(user_id=user_id, chat_id=chat_id, message_id=message_id, delete_at=delete_at)
         self.session.add(item)
         await self.session.flush()
         return item
@@ -19,9 +21,9 @@ class TemporaryMessageRepository(BaseRepository[TemporaryMessage]):
             select(TemporaryMessage)
             .where(
                 TemporaryMessage.status == TemporaryMessageStatus.PENDING,
-                TemporaryMessage.delete_after <= datetime.now(UTC),
+                TemporaryMessage.delete_at <= datetime.now(UTC),
             )
-            .order_by(TemporaryMessage.delete_after)
+            .order_by(TemporaryMessage.delete_at)
             .limit(limit)
         )
         return list(result.scalars())
