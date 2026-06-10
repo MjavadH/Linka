@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from typing import cast
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
@@ -21,11 +22,15 @@ class BroadcastService:
             if payload.kind == "text":
                 message = await self.bot.send_message(telegram_id, str(payload.data["text"]))
             elif payload.kind == "copy_message":
-                message = await self.bot.copy_message(
+                from_chat_id = cast(int | str, payload.data["from_chat_id"])
+                message_id = cast(int | str, payload.data["message_id"])
+                copied = await self.bot.copy_message(
                     chat_id=telegram_id,
-                    from_chat_id=int(payload.data["from_chat_id"]),
-                    message_id=int(payload.data["message_id"]),
+                    from_chat_id=int(from_chat_id),
+                    message_id=int(message_id),
                 )
+                await asyncio.sleep(self.delay)
+                return copied.message_id
             elif payload.kind == "photo":
                 message = await self.bot.send_photo(telegram_id, str(payload.data["file_id"]))
             elif payload.kind == "video":

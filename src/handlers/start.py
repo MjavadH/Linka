@@ -14,6 +14,7 @@ from repositories.users import UserRepository
 from services.file_delivery import FileDeliveryService
 from services.premium import PremiumService
 from services.sponsors import SponsorService
+from services.storage import build_storage_service
 
 router = Router(name="start")
 
@@ -42,6 +43,7 @@ async def start_with_deep_link(
         premium=PremiumService(SubscriptionRepository(session)),
         temporary_messages=TemporaryMessageRepository(session),
         downloads=DownloadRepository(session),
+        storage=build_storage_service(message.bot, settings.archive_chat_id),
         delete_after_seconds=settings.file_delete_after_seconds,
     )
     result = await service.deliver(token, user.id, message.from_user.id, message.chat.id)

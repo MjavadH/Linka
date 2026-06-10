@@ -8,6 +8,7 @@ class AdminSettingsView:
     delete_timeout_seconds: int
     premium_default_duration_days: int
     broadcast_batch_size: int
+    archive_chat_id: int | None
 
 
 class AdminSettingsService:
@@ -25,4 +26,5 @@ class AdminSettingsService:
             delete_timeout_seconds=self.settings.file_delete_after_seconds,
             premium_default_duration_days=self.settings.premium_default_duration_days,
             broadcast_batch_size=self.settings.broadcast_batch_size,
+            archive_chat_id=self.settings.archive_chat_id,
         )

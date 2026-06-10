@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     environment: Literal["local", "development", "staging", "production"] = "local"
     bot_token: str = Field(..., min_length=10)
     bot_username: str = Field(..., min_length=1)
+    archive_chat_id: int | None = None
     database_url: str = Field(..., min_length=1)
     redis_url: str | None = None
     admin_telegram_ids: tuple[int, ...] = ()

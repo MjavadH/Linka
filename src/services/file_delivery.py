@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from aiogram import Bot
 from aiogram.types import Message
@@ -11,6 +12,7 @@ from repositories.files import DeepLinkRepository, FileVariantRepository
 from repositories.temporary_messages import TemporaryMessageRepository
 from services.premium import PremiumService
 from services.sponsors import SponsorCheckResult, SponsorService
+from services.storage import StorageService
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class FileDeliveryService:
         premium: PremiumService,
         temporary_messages: TemporaryMessageRepository,
         downloads: DownloadRepository,
+        storage: StorageService,
         delete_after_seconds: int,
     ) -> None:
         self.bot = bot
@@ -39,6 +42,7 @@ class FileDeliveryService:
         self.premium = premium
         self.temporary_messages = temporary_messages
         self.downloads = downloads
+        self.storage = storage
         self.delete_after_seconds = delete_after_seconds
 
     async def deliver(self, token: str, user_id: int, telegram_id: int, chat_id: int) -> DeliveryResult:
@@ -56,7 +60,7 @@ class FileDeliveryService:
         if variant is None:
             return DeliveryResult(delivered=False, reason="file_unavailable")
 
-        requires_premium = deep_link.requires_premium or variant.access_level == FileAccessLevel.PREMIUM
+        requires_premium = deep_link.requires_premium or variant.is_premium or variant.access_level == FileAccessLevel.PREMIUM
         has_premium = await self.premium.has_premium(user_id)
         if requires_premium and not has_premium:
             return DeliveryResult(delivered=False, reason="premium_required")
@@ -76,8 +80,11 @@ class FileDeliveryService:
 
     async def _resolve_variant(self, deep_link: DeepLink) -> FileVariant | None:
         if deep_link.variant and deep_link.variant.is_active:
-            return deep_link.variant
+            return cast(FileVariant, deep_link.variant)
         return await self.variants.get_default_for_file(deep_link.file_id)
 
     async def _send_file(self, chat_id: int, variant: FileVariant) -> Message:
-        return await self.bot.send_document(chat_id=chat_id, document=variant.telegram_file_id)
+        reference = await self.storage.get_file(variant)
+        if reference.file_id is None:
+            raise RuntimeError("Storage provider did not return a Telegram-sendable file reference")
+        return await self.bot.send_document(chat_id=chat_id, document=reference.file_id)
