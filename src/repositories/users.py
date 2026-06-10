@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from models.enums import SponsorStatus
 from models.user import User
 from repositories.base import BaseRepository
 
@@ -29,5 +30,24 @@ class UserRepository(BaseRepository[User]):
         query = select(User.telegram_id).order_by(User.id).limit(limit)
         if after_id is not None:
             query = query.where(User.id > after_id)
+        result = await self.session.execute(query)
+        return list(result.scalars())
+
+    async def list_verified_sponsor_users(
+        self, *, after_user_id: int | None, limit: int
+    ) -> list[User]:
+        query = (
+            select(User)
+            .where(User.sponsor_status == SponsorStatus.VERIFIED)
+            .order_by(User.last_seen_at.desc(), User.id.desc())
+            .limit(limit)
+        )
+        if after_user_id is not None:
+            cursor = await self.session.get(User, after_user_id)
+            if cursor is not None:
+                query = query.where(
+                    (User.last_seen_at < cursor.last_seen_at)
+                    | ((User.last_seen_at == cursor.last_seen_at) & (User.id < cursor.id))
+                )
         result = await self.session.execute(query)
         return list(result.scalars())

@@ -50,18 +50,21 @@ class FileDeliveryService:
         if deep_link is None or not deep_link.file.is_active:
             return DeliveryResult(delivered=False, reason="invalid_token")
 
-        sponsor_check = await self.sponsors.check_user(telegram_id)
-        if not sponsor_check.passed:
-            return DeliveryResult(
-                delivered=False, reason="missing_sponsors", sponsor_check=sponsor_check
-            )
+        requires_premium = deep_link.requires_premium
+        has_premium = await self.premium.has_premium(user_id)
+        sponsor_check = SponsorCheckResult(True, [], [])
+        if not has_premium:
+            sponsor_check = await self.sponsors.check_user(telegram_id)
+            if not sponsor_check.passed:
+                return DeliveryResult(
+                    delivered=False, reason="missing_sponsors", sponsor_check=sponsor_check
+                )
 
         variant = await self._resolve_variant(deep_link)
         if variant is None:
             return DeliveryResult(delivered=False, reason="file_unavailable")
 
-        requires_premium = deep_link.requires_premium or variant.is_premium or variant.access_level == FileAccessLevel.PREMIUM
-        has_premium = await self.premium.has_premium(user_id)
+        requires_premium = requires_premium or variant.is_premium or variant.access_level == FileAccessLevel.PREMIUM
         if requires_premium and not has_premium:
             return DeliveryResult(delivered=False, reason="premium_required")
 

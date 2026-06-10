@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FILE_DELETE_AFTER_SECONDS", "DELETE_AFTER_SECONDS"),
     )
     scheduler_interval_seconds: int = Field(default=30, ge=5)
+    sponsor_verification_interval_seconds: int = Field(default=300, ge=60)
+    sponsor_verification_batch_size: int = Field(default=100, ge=1, le=1000)
     broadcast_rate_limit_per_second: int = Field(default=20, ge=1, le=30)
     broadcast_batch_size: int = Field(default=100, ge=1)
     premium_default_duration_days: int = Field(default=30, ge=1)
