@@ -47,8 +47,8 @@ def premium_choice_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Free", callback_data="file_premium:0"),
-                InlineKeyboardButton(text="Premium", callback_data="file_premium:1"),
+                InlineKeyboardButton(text="🆓 Free", callback_data="file_premium:0"),
+                InlineKeyboardButton(text="💎 Premium", callback_data="file_premium:1"),
             ],
             navigation_row(back_to=AdminSection.FILES),
         ]
