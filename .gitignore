@@ -9,3 +9,4 @@ __pycache__/
 !.env.example
 htmlcov/
 .coverage
+.idea/

@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0003_captions_editing_and_temporary_deletions"
-down_revision: str | None = "0002_file_storage_and_deep_links"
+revision: str = "0003"
+down_revision: str | None = "0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -112,8 +112,8 @@ def premium_choice_keyboard(file_id: int = 0, variant_id: int = 0) -> InlineKeyb
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Free", callback_data=f"file_premium:0{suffix}"),
-                InlineKeyboardButton(text="Premium", callback_data=f"file_premium:1{suffix}"),
+                InlineKeyboardButton(text="🆓 Free", callback_data=f"file_premium:0{suffix}"),
+                InlineKeyboardButton(text="💎 Premium", callback_data=f"file_premium:1{suffix}"),
             ],
             navigation_row(back_to=AdminSection.FILES),
         ]

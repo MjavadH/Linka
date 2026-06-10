@@ -9,8 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0002_file_storage_and_deep_links"
-down_revision: str | None = "0001_initial_schema"
+revision: str = "0002"
+down_revision: str | None = "0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
