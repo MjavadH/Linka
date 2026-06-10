@@ -19,10 +19,20 @@ class BotAdminNotifier(AdminNotifier):
         self.admin_ids = admin_ids
 
     async def sponsor_inaccessible(self, sponsor: Sponsor, error: Exception) -> None:
-        message = (
+        await self._notify(
             f'⚠️ Sponsor channel "{sponsor.title}" is no longer accessible. '
             "Please re-add the bot or deactivate the sponsor."
         )
+
+    async def sponsor_expired(self, sponsor: Sponsor) -> None:
+        await self._notify(f'✅ Sponsor "{sponsor.title}" expired automatically.')
+
+    async def sponsor_join_target_reached(self, sponsor: Sponsor) -> None:
+        await self._notify(
+            f'✅ Sponsor "{sponsor.title}" reached target join count and was deactivated.'
+        )
+
+    async def _notify(self, message: str) -> None:
         for admin_id in self.admin_ids:
             try:
                 await self.bot.send_message(admin_id, message)
@@ -59,3 +69,14 @@ class SponsorVerificationJob:
                 logger.warning("sponsor_user_verification_failed", user_id=user.id, error=str(exc))
         await self.session.commit()
         return next_cursor
+
+
+class SponsorExpirationJob:
+    def __init__(self, bot: Bot, session: AsyncSession, settings: Settings) -> None:
+        self.session = session
+        self.sponsors = SponsorService(SponsorRepository(session), bot)
+        self.notifier = BotAdminNotifier(bot, settings.admin_telegram_ids)
+
+    async def run(self) -> None:
+        await self.sponsors.expire_sponsors(self.notifier)
+        await self.session.commit()

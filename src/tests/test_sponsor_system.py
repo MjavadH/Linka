@@ -48,17 +48,24 @@ class FakePremiumService:
 
 
 class FakeSponsorService:
-    def __init__(self, missing: list[Sponsor] | None = None) -> None:
+    def __init__(
+        self, missing: list[Sponsor] | None = None, active: list[Sponsor] | None = None
+    ) -> None:
         self.missing = missing or []
+        self.active = active if active is not None else self.missing
 
     async def check_user_against_active_sponsors(self, telegram_id: int) -> list[Sponsor]:
         return self.missing
 
     async def list_active_sponsors(self) -> list[Sponsor]:
-        return self.missing
+        return self.active
 
     async def is_user_missing_sponsor(self, telegram_id: int, sponsor: Sponsor) -> bool:
         return sponsor in self.missing
+
+    async def record_successful_verification(self, sponsors: list[Sponsor]) -> None:
+        for sponsor in sponsors:
+            sponsor.sponsor_join_count = (sponsor.sponsor_join_count or 0) + 1
 
 
 class FakeBot:
@@ -198,6 +205,42 @@ def test_sponsor_deactivation_admin_alert_message() -> None:
                 222,
                 '⚠️ Sponsor channel "Partner" is no longer accessible. Please re-add the bot or deactivate the sponsor.',
             ),
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_successful_verification_increments_active_sponsor_join_count_once() -> None:
+    async def scenario() -> None:
+        active_sponsor = sponsor("Growth")
+        current_user = user(SponsorStatus.PENDING)
+        service = UserSponsorService(
+            cast(Any, FakeBot()),
+            cast(Any, FakeSponsorService([], [active_sponsor])),
+            cast(Any, FakeUserSponsorRepository()),
+            cast(Any, FakePremiumService(False)),
+        )
+
+        await service.verify_joined(current_user)
+        await service.verify_joined(current_user)
+
+        assert active_sponsor.sponsor_join_count == 1
+
+    asyncio.run(scenario())
+
+
+def test_admin_notifier_sends_expiration_messages() -> None:
+    async def scenario() -> None:
+        bot = FakeBot()
+        notifier = BotAdminNotifier(cast(Any, bot), (111,))
+        item = sponsor("Partner")
+
+        await notifier.sponsor_expired(item)
+        await notifier.sponsor_join_target_reached(item)
+
+        assert bot.sent_messages == [
+            (111, '✅ Sponsor "Partner" expired automatically.'),
+            (111, '✅ Sponsor "Partner" reached target join count and was deactivated.'),
         ]
 
     asyncio.run(scenario())

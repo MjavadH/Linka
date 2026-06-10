@@ -20,6 +20,10 @@ logger = structlog.get_logger(__name__)
 class AdminNotifier(Protocol):
     async def sponsor_inaccessible(self, sponsor: Sponsor, error: Exception) -> None: ...
 
+    async def sponsor_expired(self, sponsor: Sponsor) -> None: ...
+
+    async def sponsor_join_target_reached(self, sponsor: Sponsor) -> None: ...
+
 
 @dataclass(frozen=True)
 class SponsorCheckResult:
@@ -34,10 +38,9 @@ class SponsorService:
         self.bot = bot
 
     async def list_active_sponsors(self) -> list[Sponsor]:
-        await self.expire_sponsors()
         return await self.repository.list_active()
 
-    async def expire_sponsors(self) -> None:
+    async def expire_sponsors(self, notifier: AdminNotifier | None = None) -> None:
         now = datetime.now(UTC)
         for sponsor in await self.repository.list_all():
             if not sponsor.is_active:
@@ -48,10 +51,14 @@ class SponsorService:
                     expires_at = expires_at.replace(tzinfo=UTC)
                 if expires_at <= now:
                     await self.repository.deactivate(sponsor, "expired")
+                    if notifier is not None:
+                        await notifier.sponsor_expired(sponsor)
             elif sponsor.expiration_type == "members" and sponsor.expiration_value:
                 target = int(sponsor.expiration_value)
-                if (sponsor.current_member_count or 0) >= target:
+                if (sponsor.sponsor_join_count or 0) >= target:
                     await self.repository.deactivate(sponsor, "member_target_reached")
+                    if notifier is not None:
+                        await notifier.sponsor_join_target_reached(sponsor)
 
     async def check_user(self, telegram_id: int) -> SponsorCheckResult:
         missing = await self.check_user_against_active_sponsors(telegram_id)
@@ -67,6 +74,9 @@ class SponsorService:
     async def is_user_missing_sponsor(self, telegram_id: int, sponsor: Sponsor) -> bool:
         member = await self.bot.get_chat_member(sponsor.chat_id, telegram_id)
         return member.status in {ChatMemberStatus.LEFT, ChatMemberStatus.KICKED}
+
+    async def record_successful_verification(self, sponsors: list[Sponsor]) -> None:
+        await self.repository.increment_join_counts(sponsors)
 
     async def deactivate_inaccessible_sponsor(
         self, sponsor: Sponsor, error: Exception, notifier: AdminNotifier | None = None
@@ -92,14 +102,21 @@ class UserSponsorService:
     async def ensure_access(self, user: User) -> SponsorCheckResult:
         if await self.premium.has_premium(user.id):
             return SponsorCheckResult(True, [], [])
-        missing = await self.sponsors.check_user_against_active_sponsors(user.telegram_id)
+        active_sponsors = await self.sponsors.list_active_sponsors()
+        missing: list[Sponsor] = []
+        for sponsor in active_sponsors:
+            if await self.sponsors.is_user_missing_sponsor(user.telegram_id, sponsor):
+                missing.append(sponsor)
         if missing:
             if user.sponsor_status == SponsorStatus.VERIFIED:
                 await self.revoke_user(user, missing)
             else:
                 await self.repository.set_status(user, SponsorStatus.PENDING)
             return SponsorCheckResult(False, [], missing)
+        became_verified = user.sponsor_status != SponsorStatus.VERIFIED
         await self.repository.set_status(user, SponsorStatus.VERIFIED)
+        if became_verified:
+            await self.sponsors.record_successful_verification(active_sponsors)
         return SponsorCheckResult(True, [], [])
 
     async def verify_joined(self, user: User) -> SponsorCheckResult:
