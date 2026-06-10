@@ -58,3 +58,22 @@ class AdminFileCallback(CallbackData, prefix="admin_file"):
     file_id: int = 0
     variant_id: int = 0
     page: int = 1
+
+
+class AdminSponsorAction(StrEnum):
+    ADD = "add"
+    VIEW = "view"
+    EDIT = "edit"
+    EDIT_INVITE = "edit_invite"
+    EDIT_EXPIRATION = "edit_expiration"
+    DEACTIVATE = "deactivate"
+    ACTIVATE = "activate"
+    DELETE = "delete"
+    EXPIRE_DATE = "expire_date"
+    EXPIRE_MEMBERS = "expire_members"
+    EXPIRE_NONE = "expire_none"
+
+
+class AdminSponsorCallback(CallbackData, prefix="admin_sponsor"):
+    action: AdminSponsorAction
+    sponsor_id: int = 0

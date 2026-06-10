@@ -20,12 +20,26 @@ class Sponsor(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     chat_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    channel_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    chat_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     title: Mapped[str] = mapped_column(String(255))
     invite_url: Mapped[str] = mapped_column(String(1024))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    expiration_type: Mapped[str] = mapped_column(String(20), default="none")
+    expiration_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     priority: Mapped[int] = mapped_column(Integer, default=100)
     current_member_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sponsor_join_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    @property
+    def channel_id(self) -> int:
+        return self.chat_id
+
+    @property
+    def invite_link(self) -> str:
+        return self.invite_url
 
     requirements = relationship("SponsorRequirement", back_populates="sponsor")
 
