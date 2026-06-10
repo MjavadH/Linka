@@ -6,7 +6,7 @@ def test_admin_ids_are_parsed_from_comma_separated_env() -> None:
         bot_token="1234567890:test-token",
         bot_username="linka_bot",
         database_url="postgresql+asyncpg://user:pass@localhost/db",
-        admin_telegram_ids="1, 2,3",
+        admin_telegram_ids="1, 2,3",  # type: ignore[arg-type]
     )
 
     assert settings.admin_telegram_ids == (1, 2, 3)

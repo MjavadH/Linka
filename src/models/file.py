@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -14,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
-from models.enums import FileAccessLevel
+from models.enums import FileAccessLevel, StorageType
 
 
 class File(Base):
@@ -37,12 +38,21 @@ class FileVariant(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     file_id: Mapped[int] = mapped_column(ForeignKey("files.id", ondelete="CASCADE"), index=True)
     quality: Mapped[str] = mapped_column(String(50))
-    telegram_file_id: Mapped[str] = mapped_column(Text)
+    storage_type: Mapped[StorageType] = mapped_column(
+        Enum(StorageType), default=StorageType.TELEGRAM, index=True
+    )
+    storage_key: Mapped[str] = mapped_column(Text)
+    telegram_file_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     telegram_file_unique_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archive_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    archive_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     access_level: Mapped[FileAccessLevel] = mapped_column(Enum(FileAccessLevel), default=FileAccessLevel.FREE)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     file = relationship("File", back_populates="variants")
     deep_links = relationship("DeepLink", back_populates="variant")
@@ -54,7 +64,9 @@ class DeepLink(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     file_id: Mapped[int] = mapped_column(ForeignKey("files.id", ondelete="CASCADE"), index=True)
-    variant_id: Mapped[int | None] = mapped_column(ForeignKey("file_variants.id"), nullable=True)
+    file_variant_id: Mapped[int | None] = mapped_column(
+        "file_variant_id", ForeignKey("file_variants.id"), nullable=True, index=True
+    )
     requires_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

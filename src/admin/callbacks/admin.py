@@ -30,3 +30,20 @@ class AdminMenuCallback(CallbackData, prefix="admin"):
 class AdminNavigationCallback(CallbackData, prefix="admin_nav"):
     action: AdminNavAction
     target: AdminSection
+
+
+class AdminFileAction(StrEnum):
+    ADD = "add"
+    LIST = "list"
+    SEARCH = "search"
+    VIEW = "view"
+    ADD_VARIANT = "add_variant"
+    DELETE = "delete"
+    LINKS = "links"
+    PAGE = "page"
+
+
+class AdminFileCallback(CallbackData, prefix="admin_file"):
+    action: AdminFileAction
+    file_id: int = 0
+    page: int = 1

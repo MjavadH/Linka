@@ -1,6 +1,13 @@
 from enum import StrEnum
 
 
+class StorageType(StrEnum):
+    TELEGRAM = "telegram"
+    MINIO = "minio"
+    S3 = "s3"
+    LOCAL = "local"
+
+
 class FileAccessLevel(StrEnum):
     FREE = "free"
     PREMIUM = "premium"

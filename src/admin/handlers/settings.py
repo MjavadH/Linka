@@ -39,5 +39,6 @@ def _settings_text(settings_view: AdminSettingsView) -> str:
         "⚙️ <b>Settings</b>\n\n"
         f"🗑 Delete timeout: <b>{settings_view.delete_timeout_seconds}s</b>\n"
         f"⭐ Premium default duration: <b>{settings_view.premium_default_duration_days} days</b>\n"
-        f"📨 Broadcast batch size: <b>{settings_view.broadcast_batch_size}</b>"
+        f"📨 Broadcast batch size: <b>{settings_view.broadcast_batch_size}</b>\n"
+        f"🗄 Archive chat ID: <b>{settings_view.archive_chat_id or 'not configured'}</b>"
     )
