@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
+from models.enums import SponsorStatus
 
 
 class User(Base):
@@ -14,7 +15,12 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    sponsor_status: Mapped[SponsorStatus] = mapped_column(
+        Enum(SponsorStatus), default=SponsorStatus.PENDING, index=True
+    )
+    sponsor_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sponsor_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_downloads: Mapped[int] = mapped_column(Integer, default=0)
 
     subscriptions = relationship("Subscription", back_populates="user", foreign_keys="Subscription.user_id")

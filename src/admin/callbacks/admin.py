@@ -58,3 +58,15 @@ class AdminFileCallback(CallbackData, prefix="admin_file"):
     file_id: int = 0
     variant_id: int = 0
     page: int = 1
+
+
+class AdminSponsorAction(StrEnum):
+    ADD = "add"
+    DEACTIVATE = "deactivate"
+    ACTIVATE = "activate"
+    DELETE = "delete"
+
+
+class AdminSponsorCallback(CallbackData, prefix="admin_sponsor"):
+    action: AdminSponsorAction
+    sponsor_id: int = 0

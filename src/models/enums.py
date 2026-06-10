@@ -42,3 +42,15 @@ class BroadcastRecipientStatus(StrEnum):
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
+
+
+class SponsorStatus(StrEnum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REVOKED = "revoked"
+
+
+class SponsorExpirationType(StrEnum):
+    DATE = "date"
+    MEMBERS = "members"
+    NONE = "none"
