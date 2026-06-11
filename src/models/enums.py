@@ -13,6 +13,11 @@ class FileAccessLevel(StrEnum):
     PREMIUM = "premium"
 
 
+class ContentType(StrEnum):
+    MOVIE = "movie"
+    EPISODE = "episode"
+
+
 class SubscriptionSource(StrEnum):
     MANUAL = "manual"
     PAYMENT_REQUEST = "payment_request"

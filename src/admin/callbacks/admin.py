@@ -34,7 +34,11 @@ class AdminNavigationCallback(CallbackData, prefix="admin_nav"):
 
 class AdminFileAction(StrEnum):
     ADD = "add"
+    ADD_MOVIE = "add_movie"
+    ADD_SERIES = "add_series"
     LIST = "list"
+    LIST_MOVIES = "list_movies"
+    LIST_SERIES = "list_series"
     SEARCH = "search"
     VIEW = "view"
     ADD_VARIANT = "add_variant"
@@ -51,12 +55,25 @@ class AdminFileAction(StrEnum):
     DELETE_VARIANT_SELECT = "delete_variant_select"
     LINKS = "links"
     PAGE = "page"
+    SERIES_PAGE = "series_page"
+    VIEW_SERIES = "view_series"
+    EDIT_SERIES = "edit_series"
+    DELETE_SERIES = "delete_series"
+    ADD_EPISODE = "add_episode"
+    EPISODES = "episodes"
+    EPISODES_PAGE = "episodes_page"
+    VIEW_EPISODE = "view_episode"
+    EDIT_EPISODE = "edit_episode"
+    DELETE_EPISODE = "delete_episode"
+    EPISODE_VARIANTS = "episode_variants"
 
 
 class AdminFileCallback(CallbackData, prefix="admin_file"):
     action: AdminFileAction
     file_id: int = 0
     variant_id: int = 0
+    series_id: int = 0
+    episode_id: int = 0
     page: int = 1
 
 

@@ -6,8 +6,14 @@ from secrets import token_urlsafe
 from aiogram.types import Message
 
 from models.enums import FileAccessLevel, StorageType
-from models.file import DeepLink, File, FileVariant
-from repositories.files import DeepLinkRepository, FileRepository, FileVariantRepository
+from models.file import DeepLink, Episode, File, FileVariant, Series
+from repositories.files import (
+    DeepLinkRepository,
+    EpisodeRepository,
+    FileRepository,
+    FileVariantRepository,
+    SeriesRepository,
+)
 from services.storage import StorageService, StoredFile
 
 
@@ -55,6 +61,67 @@ class FileService:
         await self.deep_links.disable_for_file(file_id)
 
 
+@dataclass(frozen=True)
+class SeriesListItem:
+    series: Series
+    episode_count: int
+
+
+class SeriesService:
+    def __init__(self, series: SeriesRepository, episodes: EpisodeRepository, deep_links: DeepLinkRepository) -> None:
+        self.series = series
+        self.episodes = episodes
+        self.deep_links = deep_links
+
+    async def create_series(self, name: str) -> Series:
+        return await self.series.create(name=name)
+
+    async def get_series(self, series_id: int) -> Series | None:
+        return await self.series.get_by_id(series_id)
+
+    async def list_series(self, page: int = 1, search: str | None = None) -> tuple[list[SeriesListItem], int]:
+        rows, total = await self.series.list_with_stats(page=page, search=search)
+        return [SeriesListItem(series=row[0], episode_count=row[1]) for row in rows], total
+
+    async def update_series_name(self, series_id: int, name: str) -> Series | None:
+        return await self.series.update_name(series_id, name)
+
+    async def soft_delete_series(self, series_id: int) -> None:
+        series = await self.series.get_by_id(series_id)
+        if series is not None:
+            for episode in series.episodes:
+                await self.deep_links.disable_for_file(episode.file_id)
+        await self.series.soft_delete(series_id)
+
+
+class EpisodeService:
+    def __init__(self, episodes: EpisodeRepository, series: SeriesRepository, deep_links: DeepLinkRepository) -> None:
+        self.episodes = episodes
+        self.series = series
+        self.deep_links = deep_links
+
+    async def create_episode(self, series_id: int, number: str) -> Episode | None:
+        series = await self.series.get_by_id(series_id)
+        if series is None:
+            return None
+        return await self.episodes.create(series, number)
+
+    async def get_episode(self, episode_id: int) -> Episode | None:
+        return await self.episodes.get_by_id(episode_id)
+
+    async def list_episodes(self, series_id: int, page: int = 1) -> tuple[list[Episode], int]:
+        return await self.episodes.list_by_series(series_id=series_id, page=page)
+
+    async def update_episode_number(self, episode_id: int, number: str) -> Episode | None:
+        return await self.episodes.update_number(episode_id, number)
+
+    async def soft_delete_episode(self, episode_id: int) -> Episode | None:
+        episode = await self.episodes.get_by_id(episode_id)
+        if episode is not None:
+            await self.deep_links.disable_for_file(episode.file_id)
+        return await self.episodes.soft_delete(episode_id)
+
+
 class FileVariantService:
     def __init__(self, variants: FileVariantRepository, storage: StorageService) -> None:
         self.variants = variants
@@ -65,6 +132,7 @@ class FileVariantService:
         *,
         file_id: int,
         quality: str,
+        episode_id: int | None = None,
         is_premium: bool,
         message: Message,
         storage_type: StorageType = StorageType.TELEGRAM,
@@ -73,6 +141,7 @@ class FileVariantService:
         return await self.variants.create(
             file_id=file_id,
             quality=quality,
+            episode_id=episode_id,
             storage_type=stored.storage_type,
             storage_key=stored.storage_key,
             telegram_file_id=stored.file_id,
@@ -97,10 +166,12 @@ class FileVariantService:
         quality: str,
         is_premium: bool,
         stored: StoredFile,
+        episode_id: int | None = None,
     ) -> FileVariant:
         return await self.variants.create(
             file_id=file_id,
             quality=quality,
+            episode_id=episode_id,
             storage_type=stored.storage_type,
             storage_key=stored.storage_key,
             telegram_file_id=stored.file_id,

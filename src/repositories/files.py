@@ -4,8 +4,8 @@ from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from models.download import Download
-from models.enums import FileAccessLevel, StorageType
-from models.file import DeepLink, File, FileVariant
+from models.enums import ContentType, FileAccessLevel, StorageType
+from models.file import DeepLink, Episode, File, FileVariant, Series
 from repositories.base import BaseRepository
 
 PAGE_SIZE = 5
@@ -15,7 +15,7 @@ class FileRepository(BaseRepository[File]):
     async def create(
         self, title: str, description: str | None = None, caption_entities: list[dict[str, object]] | None = None
     ) -> File:
-        file = File(title=title, description=description, caption_entities=caption_entities)
+        file = File(title=title, description=description, caption_entities=caption_entities, content_type=ContentType.MOVIE)
         self.session.add(file)
         await self.session.flush()
         return file
@@ -48,10 +48,10 @@ class FileRepository(BaseRepository[File]):
             )
             .outerjoin(variant_counts, variant_counts.c.file_id == File.id)
             .outerjoin(download_counts, download_counts.c.file_id == File.id)
-            .where(File.is_active.is_(True))
+            .where(File.is_active.is_(True), File.content_type == ContentType.MOVIE)
             .order_by(File.created_at.desc(), File.id.desc())
         )
-        count_stmt = select(func.count(File.id)).where(File.is_active.is_(True))
+        count_stmt = select(func.count(File.id)).where(File.is_active.is_(True), File.content_type == ContentType.MOVIE)
         if search:
             pattern = f"%{search}%"
             matching_variant_file_ids = select(FileVariant.file_id).where(FileVariant.filename.ilike(pattern))
@@ -168,6 +168,7 @@ class FileVariantRepository(BaseRepository[FileVariant]):
         *,
         file_id: int,
         quality: str,
+        episode_id: int | None = None,
         storage_type: StorageType,
         storage_key: str,
         telegram_file_id: str | None,
@@ -185,6 +186,7 @@ class FileVariantRepository(BaseRepository[FileVariant]):
     ) -> FileVariant:
         variant = FileVariant(
             file_id=file_id,
+            episode_id=episode_id,
             quality=quality,
             storage_type=storage_type,
             storage_key=storage_key,
@@ -281,3 +283,113 @@ class FileVariantRepository(BaseRepository[FileVariant]):
             .order_by(FileVariant.id)
         )
         return list(result.scalars().all())
+
+
+class SeriesRepository(BaseRepository[Series]):
+    async def create(self, name: str) -> Series:
+        series = Series(name=name)
+        self.session.add(series)
+        await self.session.flush()
+        return series
+
+    async def get_by_id(self, series_id: int) -> Series | None:
+        result = await self.session.execute(
+            select(Series).options(selectinload(Series.episodes)).where(Series.id == series_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_with_stats(
+        self, page: int = 1, search: str | None = None, page_size: int = PAGE_SIZE
+    ) -> tuple[list[tuple[Series, int]], int]:
+        episode_counts = (
+            select(Episode.series_id, func.count(Episode.id).label("episode_count"))
+            .where(Episode.is_active.is_(True))
+            .group_by(Episode.series_id)
+            .subquery()
+        )
+        stmt = (
+            select(Series, func.coalesce(episode_counts.c.episode_count, 0))
+            .outerjoin(episode_counts, episode_counts.c.series_id == Series.id)
+            .where(Series.is_active.is_(True))
+            .order_by(Series.created_at.desc(), Series.id.desc())
+        )
+        count_stmt = select(func.count(Series.id)).where(Series.is_active.is_(True))
+        if search:
+            pattern = f"%{search}%"
+            stmt = stmt.where(Series.name.ilike(pattern))
+            count_stmt = count_stmt.where(Series.name.ilike(pattern))
+        total = int(await self.session.scalar(count_stmt) or 0)
+        result = await self.session.execute(stmt.offset(max(page - 1, 0) * page_size).limit(page_size))
+        return [(row[0], int(row[1])) for row in result.all()], total
+
+    async def update_name(self, series_id: int, name: str) -> Series | None:
+        series = await self.get_by_id(series_id)
+        if series is None:
+            return None
+        series.name = name
+        await self.session.flush()
+        return series
+
+    async def soft_delete(self, series_id: int) -> None:
+        episode_ids = select(Episode.id).where(Episode.series_id == series_id)
+        file_ids = select(Episode.file_id).where(Episode.series_id == series_id)
+        await self.session.execute(update(Series).where(Series.id == series_id).values(is_active=False))
+        await self.session.execute(update(Episode).where(Episode.series_id == series_id).values(is_active=False))
+        await self.session.execute(update(File).where(File.id.in_(file_ids)).values(is_active=False))
+        await self.session.execute(update(FileVariant).where(FileVariant.episode_id.in_(episode_ids)).values(is_active=False))
+        await self.session.flush()
+
+
+class EpisodeRepository(BaseRepository[Episode]):
+    async def create(self, series: Series, number: str) -> Episode:
+        file = File(title=f"{series.name} Episode {number}", content_type=ContentType.EPISODE)
+        self.session.add(file)
+        await self.session.flush()
+        episode = Episode(series_id=series.id, file_id=file.id, number=number)
+        self.session.add(episode)
+        await self.session.flush()
+        return episode
+
+    async def get_by_id(self, episode_id: int) -> Episode | None:
+        result = await self.session.execute(
+            select(Episode)
+            .options(selectinload(Episode.series), selectinload(Episode.variants), selectinload(Episode.file))
+            .where(Episode.id == episode_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_series(
+        self, series_id: int, page: int = 1, page_size: int = PAGE_SIZE
+    ) -> tuple[list[Episode], int]:
+        count_stmt = select(func.count(Episode.id)).where(Episode.series_id == series_id, Episode.is_active.is_(True))
+        stmt = (
+            select(Episode)
+            .where(Episode.series_id == series_id, Episode.is_active.is_(True))
+            .order_by(Episode.created_at.asc(), Episode.id.asc())
+            .offset(max(page - 1, 0) * page_size)
+            .limit(page_size)
+        )
+        total = int(await self.session.scalar(count_stmt) or 0)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total
+
+    async def update_number(self, episode_id: int, number: str) -> Episode | None:
+        episode = await self.get_by_id(episode_id)
+        if episode is None:
+            return None
+        episode.number = number
+        if episode.file is not None and episode.series is not None:
+            episode.file.title = f"{episode.series.name} Episode {number}"
+        await self.session.flush()
+        return episode
+
+    async def soft_delete(self, episode_id: int) -> Episode | None:
+        episode = await self.get_by_id(episode_id)
+        if episode is None:
+            return None
+        episode.is_active = False
+        if episode.file is not None:
+            episode.file.is_active = False
+        await self.session.execute(update(FileVariant).where(FileVariant.episode_id == episode_id).values(is_active=False))
+        await self.session.flush()
+        return episode

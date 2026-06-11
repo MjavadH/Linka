@@ -18,19 +18,39 @@ from admin.callbacks import (
     AdminSection,
 )
 from admin.keyboards import (
+    content_type_keyboard,
+    episode_detail_keyboard,
+    episodes_list_keyboard,
     file_detail_keyboard,
     file_edit_keyboard,
     file_list_keyboard,
     file_management_keyboard,
     premium_choice_keyboard,
+    series_detail_keyboard,
+    series_list_keyboard,
     variant_edit_keyboard,
     variant_selection_keyboard,
 )
 from admin.states.files import AdminFileStates
 from core.config import Settings
 from models.enums import StorageType
-from repositories.files import PAGE_SIZE, DeepLinkRepository, FileRepository, FileVariantRepository
-from services.files import DeepLinkService, FileListItem, FileService, FileVariantService
+from repositories.files import (
+    PAGE_SIZE,
+    DeepLinkRepository,
+    EpisodeRepository,
+    FileRepository,
+    FileVariantRepository,
+    SeriesRepository,
+)
+from services.files import (
+    DeepLinkService,
+    EpisodeService,
+    FileListItem,
+    FileService,
+    FileVariantService,
+    SeriesListItem,
+    SeriesService,
+)
 from services.storage import (
     ArchiveChannelValidationService,
     StorageError,
@@ -58,29 +78,45 @@ async def navigate_files(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.ADD))
-async def add_file(callback: CallbackQuery, state: FSMContext, settings: Settings) -> None:
-    if not settings.archive_chat_id:
-        await callback.answer("ARCHIVE_CHAT_ID is not configured.", show_alert=True)
-        return
-    if callback.bot is None:
-        return
-    validation = await ArchiveChannelValidationService(callback.bot).validate(settings.archive_chat_id)
-    if not validation.is_valid:
-        await callback.answer("Archive channel is not ready.", show_alert=True)
-        if isinstance(callback.message, Message):
-            await callback.message.edit_text(
-                "❌ <b>Archive channel validation failed</b>\n\n"
-                + "\n".join(f"• {escape(error)}" for error in validation.errors),
-                reply_markup=file_management_keyboard(),
-            )
+async def add_file(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            "➕ <b>Add Content</b>\n\nChoose the content type to create.",
+            reply_markup=content_type_keyboard(),
+        )
+    await callback.answer()
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.ADD_MOVIE))
+async def add_movie(callback: CallbackQuery, state: FSMContext, settings: Settings) -> None:
+    if not await _validate_archive(callback, settings):
         return
     await state.set_state(AdminFileStates.waiting_for_upload)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
-            "📁 <b>Add File</b>\n\nSend a Telegram document, video, or audio file.",
+            "📁 <b>Add Movie</b>\n\nSend a Telegram document, video, or audio file.",
             reply_markup=file_management_keyboard(),
         )
     await callback.answer()
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.ADD_SERIES))
+async def add_series(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminFileStates.waiting_for_series_name)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text("📺 <b>Add Series</b>\n\nSend the series name.")
+    await callback.answer()
+
+
+@router.message(AdminFileStates.waiting_for_series_name, F.text)
+async def receive_series_name(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    series = await SeriesService(
+        SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)
+    ).create_series(_message_text(message).strip())
+    await state.clear()
+    await message.answer("✅ Series created.")
+    await _send_series_detail_message(message, series.id, session)
 
 
 @router.message(AdminFileStates.waiting_for_upload, F.document | F.video | F.audio)
@@ -157,7 +193,7 @@ async def finish_file_registration(
     await callback.answer()
 
 
-@router.callback_query(AdminFileCallback.filter(F.action.in_({AdminFileAction.LIST, AdminFileAction.PAGE})))
+@router.callback_query(AdminFileCallback.filter(F.action.in_({AdminFileAction.LIST, AdminFileAction.LIST_MOVIES, AdminFileAction.PAGE})))
 async def list_files(
     callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession
 ) -> None:
@@ -168,7 +204,7 @@ async def list_files(
 async def search_files(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFileStates.waiting_for_search)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("🔍 Send a title or filename search query.")
+        await callback.message.edit_text("🔍 Send a movie title, series name, or filename search query.")
     await callback.answer()
 
 
@@ -179,8 +215,8 @@ async def receive_search(message: Message, state: FSMContext, session: AsyncSess
         page=1, search=_message_text(message).strip()
     )
     await message.answer(
-        _file_list_text(rows, total, 1, search=_message_text(message).strip()),
-        reply_markup=file_list_keyboard([(item.file.id, item.file.title) for item in rows], 1, total > PAGE_SIZE),
+        _search_text(rows, await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).list_series(page=1, search=_message_text(message).strip()), 1, _message_text(message).strip()),
+        reply_markup=file_management_keyboard(),
     )
 
 
@@ -206,7 +242,12 @@ async def show_deep_links(
         link = await links_service.get_or_create_for_variant(variant)
         lines.append(f"<b>{escape(variant.quality)}</b>: <code>{escape(links_service.build_link(link.token))}</code>")
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("\n".join(lines), reply_markup=file_detail_keyboard(file.id))
+        await callback.message.edit_text(
+                "\n".join(lines),
+                reply_markup=episode_detail_keyboard(callback_data.series_id, callback_data.episode_id, file.id)
+                if callback_data.episode_id
+                else file_detail_keyboard(file.id),
+            )
     await callback.answer()
 
 
@@ -225,7 +266,7 @@ async def delete_file(
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.ADD_VARIANT))
 async def add_variant(callback: CallbackQuery, callback_data: AdminFileCallback, state: FSMContext) -> None:
-    await state.update_data(file_id=callback_data.file_id)
+    await state.update_data(file_id=callback_data.file_id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_variant_upload)
     if isinstance(callback.message, Message):
         await callback.message.edit_text("➕ Send the document, video, or audio for the new variant.")
@@ -264,6 +305,7 @@ async def finish_variant_registration(
     ).create_variant_from_stored(
         file_id=int(data["file_id"]),
         quality=cast(str, data["quality"]),
+        episode_id=int(data.get("episode_id") or 0) or None,
         is_premium=_premium_choice(callback.data),
         stored=_stored_from_state(data["stored_file"]),
     )
@@ -275,7 +317,7 @@ async def finish_variant_registration(
         await callback.message.edit_text(
             "✅ Variant added.\n\n"
             f"Deep link:\n<code>{escape(DeepLinkService(DeepLinkRepository(session), settings.bot_username).build_link(link.token))}</code>",
-            reply_markup=file_detail_keyboard(variant.file_id),
+            reply_markup=episode_detail_keyboard(int(data["series_id"]), int(data["episode_id"]), variant.file_id) if int(data.get("episode_id") or 0) else file_detail_keyboard(variant.file_id),
         )
     await callback.answer()
 
@@ -376,7 +418,7 @@ async def edit_variant_menu(callback: CallbackQuery, callback_data: AdminFileCal
         f"Caption: <blockquote>{escape(variant.caption or 'inherits parent caption')}</blockquote>"
     )
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=variant_edit_keyboard(variant.file_id, variant.id))
+        await callback.message.edit_text(text, reply_markup=variant_edit_keyboard(variant.file_id, variant.id, callback_data.series_id, callback_data.episode_id))
     await callback.answer()
 
 
@@ -386,7 +428,7 @@ async def edit_variant_quality(callback: CallbackQuery, callback_data: AdminFile
     if variant is None:
         await callback.answer("Variant not found", show_alert=True)
         return
-    await state.update_data(file_id=variant.file_id, variant_id=variant.id)
+    await state.update_data(file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_edit_variant_quality)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(f"Current quality: <b>{escape(variant.quality)}</b>\n\nSend the new quality label.")
@@ -402,7 +444,10 @@ async def save_variant_quality(message: Message, state: FSMContext, session: Asy
     )
     await state.clear()
     await message.answer("✅ Variant quality updated.")
-    await _send_file_detail_message(message, file_id, session)
+    if int(data.get("episode_id") or 0):
+        await _send_episode_detail_message(message, int(data["episode_id"]), session)
+    else:
+        await _send_file_detail_message(message, file_id, session)
 
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.EDIT_VARIANT_PREMIUM))
@@ -410,7 +455,7 @@ async def edit_variant_premium(callback: CallbackQuery, callback_data: AdminFile
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "Choose the new premium status for this variant.",
-            reply_markup=premium_choice_keyboard(callback_data.file_id, callback_data.variant_id),
+            reply_markup=premium_choice_keyboard(callback_data.file_id, callback_data.variant_id, callback_data.series_id, callback_data.episode_id),
         )
     await callback.answer()
 
@@ -418,15 +463,19 @@ async def edit_variant_premium(callback: CallbackQuery, callback_data: AdminFile
 @router.callback_query(F.data.startswith("file_premium:"))
 async def save_variant_premium(callback: CallbackQuery, session: AsyncSession) -> None:
     parts = (callback.data or "").split(":")
-    if len(parts) != 4 or parts[2] == "0" or parts[3] == "0":
+    if len(parts) < 4 or parts[2] == "0" or parts[3] == "0":
         return
     file_id = int(parts[2])
     variant_id = int(parts[3])
+    episode_id = int(parts[5]) if len(parts) > 5 and parts[5] else 0
     await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, callback.bot), None)).update_variant(
         variant_id, is_premium=parts[1] == "1"
     )
     if isinstance(callback.message, Message):
-        await _edit_file_detail_message(callback.message, file_id, session)
+        if episode_id:
+            await _edit_episode_detail_message(callback.message, episode_id, session)
+        else:
+            await _edit_file_detail_message(callback.message, file_id, session)
     await callback.answer("Premium status updated")
 
 
@@ -436,7 +485,7 @@ async def edit_variant_caption(callback: CallbackQuery, callback_data: AdminFile
     if variant is None:
         await callback.answer("Variant not found", show_alert=True)
         return
-    await state.update_data(file_id=variant.file_id, variant_id=variant.id)
+    await state.update_data(file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_edit_variant_caption)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -457,7 +506,10 @@ async def save_variant_caption(message: Message, state: FSMContext, session: Asy
     )
     await state.clear()
     await message.answer("✅ Variant caption updated.")
-    await _send_file_detail_message(message, file_id, session)
+    if int(data.get("episode_id") or 0):
+        await _send_episode_detail_message(message, int(data["episode_id"]), session)
+    else:
+        await _send_file_detail_message(message, file_id, session)
 
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.EDIT_VARIANT_STORAGE))
@@ -466,7 +518,7 @@ async def edit_variant_storage(callback: CallbackQuery, callback_data: AdminFile
     if variant is None:
         await callback.answer("Variant not found", show_alert=True)
         return
-    await state.update_data(file_id=variant.file_id, variant_id=variant.id)
+    await state.update_data(file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_edit_variant_storage)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -494,7 +546,10 @@ async def save_variant_storage(message: Message, state: FSMContext, session: Asy
     )
     await state.clear()
     await message.answer("✅ Storage metadata updated.")
-    await _send_file_detail_message(message, file_id, session)
+    if int(data.get("episode_id") or 0):
+        await _send_episode_detail_message(message, int(data["episode_id"]), session)
+    else:
+        await _send_file_detail_message(message, file_id, session)
 
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.DELETE_VARIANT))
@@ -506,7 +561,7 @@ async def delete_variant_menu(callback: CallbackQuery, callback_data: AdminFileC
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "❌ Select the variant to delete. Other variants will remain available.",
-            reply_markup=variant_selection_keyboard(file.id, file.variants, AdminFileAction.DELETE_VARIANT_SELECT),
+            reply_markup=variant_selection_keyboard(file.id, file.variants, AdminFileAction.DELETE_VARIANT_SELECT, callback_data.series_id, callback_data.episode_id),
         )
     await callback.answer()
 
@@ -520,8 +575,169 @@ async def delete_variant(callback: CallbackQuery, callback_data: AdminFileCallba
         await callback.answer("Variant not found", show_alert=True)
         return
     if isinstance(callback.message, Message):
-        await _edit_file_detail_message(callback.message, variant.file_id, session)
+        if callback_data.episode_id:
+            await _edit_episode_detail_message(callback.message, callback_data.episode_id, session)
+        else:
+            await _edit_file_detail_message(callback.message, variant.file_id, session)
     await callback.answer("Variant deleted")
+
+
+@router.callback_query(AdminFileCallback.filter(F.action.in_({AdminFileAction.LIST_SERIES, AdminFileAction.SERIES_PAGE})))
+async def list_series(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    rows, total = await SeriesService(
+        SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)
+    ).list_series(page=callback_data.page)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            _series_list_text(rows, total, callback_data.page),
+            reply_markup=series_list_keyboard(
+                [(item.series.id, item.series.name) for item in rows], callback_data.page, callback_data.page * PAGE_SIZE < total
+            ),
+        )
+    await callback.answer()
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.VIEW_SERIES))
+async def view_series(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    await _send_series_detail(callback, callback_data.series_id, session)
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.EDIT_SERIES))
+async def edit_series(callback: CallbackQuery, callback_data: AdminFileCallback, state: FSMContext, session: AsyncSession) -> None:
+    series = await SeriesRepository(session).get_by_id(callback_data.series_id)
+    if series is None:
+        await callback.answer("Series not found", show_alert=True)
+        return
+    await state.update_data(series_id=series.id)
+    await state.set_state(AdminFileStates.waiting_for_edit_series_name)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(f"Current series name: <b>{escape(series.name)}</b>\n\nSend the new series name.")
+    await callback.answer()
+
+
+@router.message(AdminFileStates.waiting_for_edit_series_name, F.text)
+async def save_series_name(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    data = await state.get_data()
+    series_id = int(data["series_id"])
+    await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).update_series_name(
+        series_id, _message_text(message).strip()
+    )
+    await state.clear()
+    await message.answer("✅ Series renamed.")
+    await _send_series_detail_message(message, series_id, session)
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.DELETE_SERIES))
+async def delete_series(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).soft_delete_series(
+        callback_data.series_id
+    )
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            "🗑 Series deleted. Episodes and variants were disabled; download history was preserved.",
+            reply_markup=file_management_keyboard(),
+        )
+    await callback.answer("Series deleted")
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.ADD_EPISODE))
+async def add_episode(callback: CallbackQuery, callback_data: AdminFileCallback, state: FSMContext, settings: Settings) -> None:
+    if not await _validate_archive(callback, settings):
+        return
+    await state.update_data(series_id=callback_data.series_id)
+    await state.set_state(AdminFileStates.waiting_for_episode_number)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text("➕ <b>Add Episode</b>\n\nEnter episode number, for example: 5, 6.1, or 55.")
+    await callback.answer()
+
+
+@router.message(AdminFileStates.waiting_for_episode_number, F.text)
+async def receive_episode_number(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    data = await state.get_data()
+    episode = await EpisodeService(EpisodeRepository(session), SeriesRepository(session), DeepLinkRepository(session)).create_episode(
+        int(data["series_id"]), _message_text(message).strip()
+    )
+    if episode is None:
+        await state.clear()
+        await message.answer("Series not found.")
+        return
+    await state.update_data(file_id=episode.file_id, episode_id=episode.id)
+    await state.set_state(AdminFileStates.waiting_for_variant_upload)
+    await message.answer("Episode created. Now upload the document, video, or audio for this episode variant.")
+
+
+@router.callback_query(AdminFileCallback.filter(F.action.in_({AdminFileAction.EPISODES, AdminFileAction.EPISODES_PAGE})))
+async def episodes_list(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    episodes, total = await EpisodeService(EpisodeRepository(session), SeriesRepository(session), DeepLinkRepository(session)).list_episodes(
+        callback_data.series_id, page=callback_data.page
+    )
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            _episodes_list_text(episodes, total, callback_data.page),
+            reply_markup=episodes_list_keyboard(callback_data.series_id, episodes, callback_data.page, callback_data.page * PAGE_SIZE < total),
+        )
+    await callback.answer()
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.VIEW_EPISODE))
+async def view_episode(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    await _send_episode_detail(callback, callback_data.episode_id, session)
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.EDIT_EPISODE))
+async def edit_episode(callback: CallbackQuery, callback_data: AdminFileCallback, state: FSMContext, session: AsyncSession) -> None:
+    episode = await EpisodeRepository(session).get_by_id(callback_data.episode_id)
+    if episode is None:
+        await callback.answer("Episode not found", show_alert=True)
+        return
+    await state.update_data(episode_id=episode.id)
+    await state.set_state(AdminFileStates.waiting_for_edit_episode_number)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(f"Current episode number: <b>{escape(episode.number)}</b>\n\nSend the new episode number.")
+    await callback.answer()
+
+
+@router.message(AdminFileStates.waiting_for_edit_episode_number, F.text)
+async def save_episode_number(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    data = await state.get_data()
+    episode = await EpisodeService(EpisodeRepository(session), SeriesRepository(session), DeepLinkRepository(session)).update_episode_number(
+        int(data["episode_id"]), _message_text(message).strip()
+    )
+    await state.clear()
+    if episode is None:
+        await message.answer("Episode not found.")
+        return
+    await message.answer("✅ Episode number updated.")
+    await _send_episode_detail_message(message, episode.id, session)
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.DELETE_EPISODE))
+async def delete_episode(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    await EpisodeService(EpisodeRepository(session), SeriesRepository(session), DeepLinkRepository(session)).soft_delete_episode(
+        callback_data.episode_id
+    )
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            "🗑 Episode deleted. Episode variants were disabled; download history was preserved.",
+            reply_markup=series_detail_keyboard(callback_data.series_id),
+        )
+    await callback.answer("Episode deleted")
+
+
+@router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.EPISODE_VARIANTS))
+async def episode_variants(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    episode = await EpisodeRepository(session).get_by_id(callback_data.episode_id)
+    if episode is None:
+        await callback.answer("Episode not found", show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(
+            _episode_detail_text(episode),
+            reply_markup=variant_selection_keyboard(
+                episode.file_id, episode.variants, AdminFileAction.EDIT_VARIANT, episode.series_id, episode.id
+            ),
+        )
+    await callback.answer()
 
 
 async def show_files(callback: CallbackQuery) -> None:
@@ -569,6 +785,134 @@ async def _send_file_detail(callback: CallbackQuery, file_id: int, session: Asyn
             reply_markup=file_detail_keyboard(file.id),
         )
     await callback.answer()
+
+
+async def _validate_archive(callback: CallbackQuery, settings: Settings) -> bool:
+    if not settings.archive_chat_id:
+        await callback.answer("ARCHIVE_CHAT_ID is not configured.", show_alert=True)
+        return False
+    if callback.bot is None:
+        return False
+    validation = await ArchiveChannelValidationService(callback.bot).validate(settings.archive_chat_id)
+    if not validation.is_valid:
+        await callback.answer("Archive channel is not ready.", show_alert=True)
+        if isinstance(callback.message, Message):
+            await callback.message.edit_text(
+                "❌ <b>Archive channel validation failed</b>\n\n"
+                + "\n".join(f"• {escape(error)}" for error in validation.errors),
+                reply_markup=file_management_keyboard(),
+            )
+        return False
+    return True
+
+
+def _series_list_text(rows: list[SeriesListItem], total: int, page: int, search: str | None = None) -> str:
+    total_pages = max(ceil(total / PAGE_SIZE), 1)
+    header = "📺 <b>Series List</b>"
+    if search:
+        header += f" — search: <code>{escape(search)}</code>"
+    lines = [header, f"Page {page}/{total_pages} • Total: {total}", ""]
+    if not rows:
+        lines.append("No series found.")
+        return "\n".join(lines)
+    for item in rows:
+        lines.extend([
+            f"<b>{escape(item.series.name)}</b>",
+            f"Episodes: {item.episode_count} • Created: {item.series.created_at:%Y-%m-%d}",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def _search_text(movie_rows: list[FileListItem], series_result: tuple[list[SeriesListItem], int], page: int, search: str) -> str:
+    series_rows, series_total = series_result
+    lines = [f"🔍 <b>Search results</b> — <code>{escape(search)}</code>", ""]
+    lines.append("<b>Movies</b>")
+    if movie_rows:
+        lines.extend(f"• {escape(item.file.title)} (Movie)" for item in movie_rows)
+    else:
+        lines.append("No matching movies.")
+    lines.append("")
+    lines.append("<b>Series</b>")
+    if series_rows:
+        lines.extend(f"• {escape(item.series.name)} (Series)" for item in series_rows)
+    else:
+        lines.append("No matching series.")
+    lines.append("")
+    lines.append(f"Showing page {page}. Series total: {series_total}")
+    return "\n".join(lines)
+
+
+def _episodes_list_text(episodes: list[Any], total: int, page: int) -> str:
+    total_pages = max(ceil(total / PAGE_SIZE), 1)
+    lines = ["📋 <b>Episodes List</b>", f"Page {page}/{total_pages} • Total: {total}", ""]
+    if not episodes:
+        lines.append("No episodes found.")
+    else:
+        lines.extend(f"Episode {escape(episode.number)}" for episode in episodes)
+    return "\n".join(lines)
+
+
+async def _send_series_detail(callback: CallbackQuery, series_id: int, session: AsyncSession) -> None:
+    series = await SeriesRepository(session).get_by_id(series_id)
+    if series is None or not series.is_active:
+        await callback.answer("Series not found", show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(_series_detail_text(series), reply_markup=series_detail_keyboard(series.id))
+    await callback.answer()
+
+
+async def _send_series_detail_message(message: Message, series_id: int, session: AsyncSession) -> None:
+    series = await SeriesRepository(session).get_by_id(series_id)
+    if series is None:
+        await message.answer("Series not found.")
+        return
+    await message.answer(_series_detail_text(series), reply_markup=series_detail_keyboard(series.id))
+
+
+def _series_detail_text(series: Any) -> str:
+    episode_count = len([episode for episode in series.episodes if episode.is_active])
+    return (
+        f"📺 <b>{escape(series.name)}</b>\n\n"
+        f"Episode Count: <b>{episode_count}</b>\n"
+        f"Created Date: <b>{series.created_at:%Y-%m-%d}</b>"
+    )
+
+
+async def _send_episode_detail(callback: CallbackQuery, episode_id: int, session: AsyncSession) -> None:
+    episode = await EpisodeRepository(session).get_by_id(episode_id)
+    if episode is None or not episode.is_active:
+        await callback.answer("Episode not found", show_alert=True)
+        return
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(_episode_detail_text(episode), reply_markup=episode_detail_keyboard(episode.series_id, episode.id, episode.file_id))
+    await callback.answer()
+
+
+async def _send_episode_detail_message(message: Message, episode_id: int, session: AsyncSession) -> None:
+    episode = await EpisodeRepository(session).get_by_id(episode_id)
+    if episode is None:
+        await message.answer("Episode not found.")
+        return
+    await message.answer(_episode_detail_text(episode), reply_markup=episode_detail_keyboard(episode.series_id, episode.id, episode.file_id))
+
+
+async def _edit_episode_detail_message(message: Message, episode_id: int, session: AsyncSession) -> None:
+    episode = await EpisodeRepository(session).get_by_id(episode_id)
+    if episode is None:
+        await message.edit_text("Episode not found.")
+        return
+    await message.edit_text(_episode_detail_text(episode), reply_markup=episode_detail_keyboard(episode.series_id, episode.id, episode.file_id))
+
+
+def _episode_detail_text(episode: Any) -> str:
+    variant_count = len([variant for variant in episode.variants if variant.is_active])
+    return (
+        f"📺 <b>{escape(episode.series.name)}</b>\n\n"
+        f"Episode Number: <b>{escape(episode.number)}</b>\n"
+        f"Variant Count: <b>{variant_count}</b>"
+    )
 
 
 async def _download_count(session: AsyncSession, file_id: int) -> int:
