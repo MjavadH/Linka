@@ -29,4 +29,4 @@ class User(Base):
 
     def is_premium_at(self, moment: datetime | None = None) -> bool:
         now = moment or datetime.now(UTC)
-        return any(subscription.expires_at > now for subscription in self.subscriptions)
+        return any(subscription.is_active and subscription.expires_at > now for subscription in self.subscriptions)

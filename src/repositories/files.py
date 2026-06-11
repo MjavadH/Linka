@@ -261,6 +261,19 @@ class FileVariantRepository(BaseRepository[FileVariant]):
         )
         return result.scalar_one_or_none()
 
+    async def get_premium_for_file(self, file_id: int) -> FileVariant | None:
+        result = await self.session.execute(
+            select(FileVariant)
+            .where(
+                FileVariant.file_id == file_id,
+                FileVariant.is_active.is_(True),
+                (FileVariant.is_premium.is_(True)) | (FileVariant.access_level == FileAccessLevel.PREMIUM),
+            )
+            .order_by(FileVariant.id.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_by_file(self, file_id: int) -> list[FileVariant]:
         result = await self.session.execute(
             select(FileVariant)

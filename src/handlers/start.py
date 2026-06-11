@@ -4,7 +4,9 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
+from keyboards.premium import premium_required_keyboard
 from keyboards.sponsors import sponsor_join_keyboard_for_sponsors
+from keyboards.user import user_main_menu_keyboard
 from repositories.downloads import DownloadRepository
 from repositories.files import DeepLinkRepository, FileVariantRepository
 from repositories.sponsors import SponsorRepository
@@ -78,13 +80,16 @@ async def start_with_deep_link(
             reply_markup=sponsor_join_keyboard_for_sponsors(result.sponsor_check.missing_sponsors),
         )
     elif result.reason == "premium_required":
-        await message.answer("This file requires an active premium subscription.")
+        await message.answer(
+            "⭐ <b>Premium Required</b>\n\nThis file is available only for premium users.",
+            reply_markup=premium_required_keyboard(),
+        )
     else:
         await message.answer("This file link is invalid or unavailable.")
 
 
 @router.message(CommandStart())
-async def start_plain(message: Message, session: AsyncSession) -> None:
+async def start_plain(message: Message, session: AsyncSession, settings: Settings) -> None:
     if message.from_user is None or message.bot is None:
         return
     user = await UserRepository(session).upsert_from_telegram(
@@ -93,9 +98,15 @@ async def start_plain(message: Message, session: AsyncSession) -> None:
         first_name=message.from_user.first_name,
     )
     _, _, user_sponsor_service = _sponsor_services(session, message.bot)
+    if message.from_user.id in settings.admin_telegram_ids:
+        await message.answer("Welcome admin. Use /admin or the Admin Panel controls to manage Linka.")
+        return
     result = await user_sponsor_service.ensure_access(user)
     if result.passed:
-        await message.answer("Welcome to Linka. Open a file deep link to receive protected content.")
+        await message.answer(
+            "Welcome to Linka. Open a file deep link to receive protected content.",
+            reply_markup=user_main_menu_keyboard(),
+        )
         return
     await message.answer(
         "Please join all required sponsor channels to use Linka, then press <b>I've Joined</b>.",

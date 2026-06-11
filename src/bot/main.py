@@ -8,6 +8,7 @@ from admin.router import create_admin_router
 from core.config import get_settings
 from core.logging import configure_logging
 from database.session import create_engine, create_session_factory
+from handlers.premium import router as premium_router
 from handlers.start import router as start_router
 from middlewares.database import DatabaseSessionMiddleware
 from scheduler.setup import setup_scheduler
@@ -23,6 +24,7 @@ async def main() -> None:
     dispatcher = Dispatcher(settings=settings)
     dispatcher.update.middleware(DatabaseSessionMiddleware(session_factory))
     dispatcher.include_router(create_admin_router(settings))
+    dispatcher.include_router(premium_router)
     dispatcher.include_router(start_router)
 
     scheduler = setup_scheduler(bot, session_factory, settings)
