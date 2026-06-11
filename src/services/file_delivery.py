@@ -60,7 +60,7 @@ class FileDeliveryService:
                     delivered=False, reason="missing_sponsors", sponsor_check=sponsor_check
                 )
 
-        variant = await self._resolve_variant(deep_link)
+        variant = await self._resolve_variant(deep_link, has_premium)
         if variant is None:
             return DeliveryResult(delivered=False, reason="file_unavailable")
 
@@ -81,9 +81,13 @@ class FileDeliveryService:
         )
         return DeliveryResult(delivered=True)
 
-    async def _resolve_variant(self, deep_link: DeepLink) -> FileVariant | None:
+    async def _resolve_variant(self, deep_link: DeepLink, has_premium: bool) -> FileVariant | None:
         if deep_link.variant and deep_link.variant.is_active:
             return cast(FileVariant, deep_link.variant)
+        if has_premium:
+            premium_variant = await self.variants.get_premium_for_file(deep_link.file_id)
+            if premium_variant is not None:
+                return premium_variant
         return await self.variants.get_default_for_file(deep_link.file_id)
 
     async def _send_file(self, chat_id: int, variant: FileVariant) -> Message:

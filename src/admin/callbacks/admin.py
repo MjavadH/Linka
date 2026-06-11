@@ -77,3 +77,23 @@ class AdminSponsorAction(StrEnum):
 class AdminSponsorCallback(CallbackData, prefix="admin_sponsor"):
     action: AdminSponsorAction
     sponsor_id: int = 0
+
+
+class AdminPremiumAction(StrEnum):
+    PLANS = "plans"
+    PLAN_ADD = "plan_add"
+    PLAN_VIEW = "plan_view"
+    PLAN_EDIT = "plan_edit"
+    PLAN_TOGGLE = "plan_toggle"
+    PLAN_DELETE = "plan_delete"
+    GRANT = "grant"
+    GRANT_PLAN = "grant_plan"
+    STATS = "stats"
+    SETTINGS = "settings"
+    SETTING_EDIT = "setting_edit"
+
+
+class AdminPremiumCallback(CallbackData, prefix="admin_prem"):
+    action: AdminPremiumAction
+    plan_id: int = 0
+    key: str = ""

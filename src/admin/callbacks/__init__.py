@@ -5,6 +5,8 @@ from admin.callbacks.admin import (
     AdminMenuCallback,
     AdminNavAction,
     AdminNavigationCallback,
+    AdminPremiumAction,
+    AdminPremiumCallback,
     AdminSection,
     AdminSponsorAction,
     AdminSponsorCallback,
@@ -19,5 +21,7 @@ __all__ = [
     "AdminSponsorAction",
     "AdminSponsorCallback",
     "AdminNavigationCallback",
+    "AdminPremiumAction",
+    "AdminPremiumCallback",
     "AdminSection",
 ]

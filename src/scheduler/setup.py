@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import Settings
 from scheduler.deletions import TemporaryMessageDeletionJob
+from scheduler.premium import PremiumExpirationJob
 from scheduler.sponsors import SponsorExpirationJob, SponsorVerificationJob
 
 
@@ -32,6 +33,10 @@ def setup_scheduler(
         async with session_factory() as session:
             await SponsorExpirationJob(bot, session, settings).run()
 
+    async def run_premium_expiration() -> None:
+        async with session_factory() as session:
+            await PremiumExpirationJob(bot, session).run()
+
     scheduler.add_job(
         run_deletions,
         "interval",
@@ -54,6 +59,14 @@ def setup_scheduler(
         "interval",
         seconds=settings.sponsor_verification_interval_seconds,
         id="sponsor-expiration",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_premium_expiration,
+        "interval",
+        seconds=settings.scheduler_interval_seconds,
+        id="premium-expiration",
         max_instances=1,
         coalesce=True,
     )

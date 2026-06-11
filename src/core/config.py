@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     broadcast_rate_limit_per_second: int = Field(default=20, ge=1, le=30)
     broadcast_batch_size: int = Field(default=100, ge=1)
     premium_default_duration_days: int = Field(default=30, ge=1)
+    premium_admin_username: str = "@admin"
+    premium_card_holder_name: str = "Not configured"
+    premium_card_number: str = "Not configured"
+    premium_crypto_wallet_address: str = "Not configured"
+    premium_crypto_network: str = "USDT TRC20"
+    premium_support_instructions: str = "Contact support for payment and subscription help."
     log_level: str = "INFO"
 
     @field_validator("admin_telegram_ids", mode="before")
