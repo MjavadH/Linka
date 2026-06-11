@@ -10,6 +10,7 @@ from models.file import DeepLink, FileVariant
 from repositories.downloads import DownloadRepository
 from repositories.files import DeepLinkRepository, FileVariantRepository
 from repositories.temporary_messages import TemporaryMessageRepository
+from repositories.user_bans import UserBanRepository
 from services.premium import PremiumService
 from services.sponsors import SponsorCheckResult, SponsorService
 from services.storage import StorageService
@@ -34,6 +35,7 @@ class FileDeliveryService:
         downloads: DownloadRepository,
         storage: StorageService,
         delete_after_seconds: int,
+        bans: UserBanRepository | None = None,
     ) -> None:
         self.bot = bot
         self.deep_links = deep_links
@@ -44,8 +46,12 @@ class FileDeliveryService:
         self.downloads = downloads
         self.storage = storage
         self.delete_after_seconds = delete_after_seconds
+        self.bans = bans
 
     async def deliver(self, token: str, user_id: int, telegram_id: int, chat_id: int) -> DeliveryResult:
+        if self.bans is not None and await self.bans.get_active_for_user(user_id) is not None:
+            return DeliveryResult(delivered=False, reason="banned")
+
         deep_link = await self.deep_links.get_active_by_token(token)
         if deep_link is None or not deep_link.file.is_active:
             return DeliveryResult(delivered=False, reason="invalid_token")

@@ -7,6 +7,7 @@ from models.sponsor import Sponsor, SponsorCampaign, SponsorRequirement
 from models.subscription import PremiumPlan, Subscription
 from models.temporary_message import TemporaryMessage
 from models.user import User
+from models.user_ban import UserBan
 
 __all__ = [
     "Broadcast",
@@ -26,4 +27,5 @@ __all__ = [
     "Subscription",
     "TemporaryMessage",
     "User",
+    "UserBan",
 ]

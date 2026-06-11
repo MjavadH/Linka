@@ -13,10 +13,13 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 _menu_button("⭐ Premium", AdminSection.PREMIUM),
-                _menu_button("📨 Broadcast", AdminSection.BROADCAST),
+                _menu_button("👥 User Management", AdminSection.USERS),
             ],
             [
+                _menu_button("📨 Broadcast", AdminSection.BROADCAST),
                 _menu_button("📊 Statistics", AdminSection.STATISTICS),
+            ],
+            [
                 _menu_button("⚙️ Settings", AdminSection.SETTINGS),
             ],
             [refresh_button(AdminSection.DASHBOARD)],

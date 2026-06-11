@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
 
 from models.enums import SponsorStatus
 from models.user import User
@@ -25,6 +26,31 @@ class UserRepository(BaseRepository[User]):
             user.last_seen_at = datetime.now(UTC)
         await self.session.flush()
         return user
+
+
+    async def search(self, query: str, limit: int = 10) -> list[User]:
+        normalized = query.strip().lstrip("@")
+        if not normalized:
+            return []
+        clauses = []
+        if normalized.isdigit():
+            clauses.append(User.telegram_id == int(normalized))
+        clauses.append(User.username.ilike(normalized))
+        result = await self.session.execute(
+            select(User)
+            .where(or_(*clauses))
+            .order_by(User.last_seen_at.desc(), User.id.desc())
+            .limit(limit)
+        )
+        return list(result.scalars())
+
+    async def get_details(self, user_id: int) -> User | None:
+        result = await self.session.execute(
+            select(User)
+            .options(selectinload(User.subscriptions), selectinload(User.bans))
+            .where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
 
     async def list_telegram_ids_after(self, after_id: int | None, limit: int) -> list[int]:
         query = select(User.telegram_id).order_by(User.id).limit(limit)

@@ -12,6 +12,7 @@ from repositories.files import DeepLinkRepository, FileVariantRepository
 from repositories.sponsors import SponsorRepository
 from repositories.subscriptions import SubscriptionRepository
 from repositories.temporary_messages import TemporaryMessageRepository
+from repositories.user_bans import UserBanRepository
 from repositories.user_sponsors import UserSponsorRepository
 from repositories.users import UserRepository
 from services.file_delivery import FileDeliveryService
@@ -69,11 +70,17 @@ async def start_with_deep_link(
         downloads=DownloadRepository(session),
         storage=build_storage_service(message.bot, settings.archive_chat_id),
         delete_after_seconds=settings.file_delete_after_seconds,
+        bans=UserBanRepository(session),
     )
     result = await service.deliver(token, user.id, message.from_user.id, message.chat.id)
 
     if result.delivered:
         await message.answer("Your file has been delivered. It will be removed automatically.")
+    elif result.reason == "banned":
+        await message.answer(
+            "🚫 You are currently banned and cannot receive files.\n\n"
+            "Please contact support if you believe this is a mistake."
+        )
     elif result.reason == "missing_sponsors" and result.sponsor_check is not None:
         await message.answer(
             "Please join all required sponsor channels, then press <b>I've Joined</b>.",
