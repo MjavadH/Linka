@@ -11,6 +11,7 @@ class AdminSection(StrEnum):
     BROADCAST = "broadcast"
     STATISTICS = "statistics"
     SETTINGS = "settings"
+    USERS = "users"
 
 
 class AdminAction(StrEnum):
@@ -114,3 +115,23 @@ class AdminPremiumCallback(CallbackData, prefix="admin_prem"):
     action: AdminPremiumAction
     plan_id: int = 0
     key: str = ""
+
+
+class AdminUserAction(StrEnum):
+    SEARCH = "search"
+    VIEW = "view"
+    GRANT_PREMIUM = "grant_premium"
+    GRANT_PLAN = "grant_plan"
+    CUSTOM_PREMIUM = "custom_premium"
+    REMOVE_PREMIUM = "remove_premium"
+    BAN = "ban"
+    BAN_PERMANENT = "ban_permanent"
+    BAN_TEMPORARY = "ban_temporary"
+    UNBAN = "unban"
+    MESSAGE = "message"
+
+
+class AdminUserCallback(CallbackData, prefix="admin_user"):
+    action: AdminUserAction
+    user_id: int = 0
+    plan_id: int = 0

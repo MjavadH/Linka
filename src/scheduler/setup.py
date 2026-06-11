@@ -6,6 +6,7 @@ from core.config import Settings
 from scheduler.deletions import TemporaryMessageDeletionJob
 from scheduler.premium import PremiumExpirationJob
 from scheduler.sponsors import SponsorExpirationJob, SponsorVerificationJob
+from scheduler.user_bans import UserBanExpirationJob
 
 
 def setup_scheduler(
@@ -37,6 +38,10 @@ def setup_scheduler(
         async with session_factory() as session:
             await PremiumExpirationJob(bot, session).run()
 
+    async def run_user_ban_expiration() -> None:
+        async with session_factory() as session:
+            await UserBanExpirationJob(bot, session).run()
+
     scheduler.add_job(
         run_deletions,
         "interval",
@@ -67,6 +72,14 @@ def setup_scheduler(
         "interval",
         seconds=settings.scheduler_interval_seconds,
         id="premium-expiration",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_user_ban_expiration,
+        "interval",
+        seconds=settings.scheduler_interval_seconds,
+        id="user-ban-expiration",
         max_instances=1,
         coalesce=True,
     )

@@ -26,6 +26,7 @@ class User(Base):
     subscriptions = relationship("Subscription", back_populates="user", foreign_keys="Subscription.user_id")
     downloads = relationship("Download", back_populates="user")
     payment_requests = relationship("PaymentRequest", back_populates="user", foreign_keys="PaymentRequest.user_id")
+    bans = relationship("UserBan", back_populates="user", cascade="all, delete-orphan")
 
     def is_premium_at(self, moment: datetime | None = None) -> bool:
         now = moment or datetime.now(UTC)
