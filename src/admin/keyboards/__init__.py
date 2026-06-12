@@ -1,3 +1,9 @@
+from admin.keyboards.broadcast import (
+    broadcast_menu_keyboard,
+    broadcast_preview_keyboard,
+    history_keyboard,
+    stop_broadcast_keyboard,
+)
 from admin.keyboards.dashboard import admin_dashboard_keyboard
 from admin.keyboards.files import (
     content_type_keyboard,
@@ -20,6 +26,8 @@ __all__ = [
     "admin_dashboard_keyboard",
     "admin_section_keyboard",
     "back_button",
+    "broadcast_menu_keyboard",
+    "broadcast_preview_keyboard",
     "content_type_keyboard",
     "episode_detail_keyboard",
     "episodes_list_keyboard",
@@ -27,10 +35,12 @@ __all__ = [
     "file_edit_keyboard",
     "file_list_keyboard",
     "file_management_keyboard",
+    "history_keyboard",
     "home_button",
     "navigation_row",
     "premium_choice_keyboard",
     "refresh_button",
+    "stop_broadcast_keyboard",
     "series_detail_keyboard",
     "series_list_keyboard",
     "variant_edit_keyboard",

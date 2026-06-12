@@ -38,15 +38,27 @@ class TemporaryMessageStatus(StrEnum):
 class BroadcastStatus(StrEnum):
     DRAFT = "draft"
     RUNNING = "running"
-    PAUSED = "paused"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     FAILED = "failed"
 
 
-class BroadcastRecipientStatus(StrEnum):
+class BroadcastTargetType(StrEnum):
+    ALL = "all"
+    PREMIUM = "premium"
+    FREE = "free"
+
+
+class BroadcastResultStatus(StrEnum):
     PENDING = "pending"
     SENT = "sent"
+    BLOCKED = "blocked"
+    DELIVERY_ERROR = "delivery_error"
     FAILED = "failed"
+
+
+# Backward-compatible alias for older imports.
+BroadcastRecipientStatus = BroadcastResultStatus
 
 
 class SponsorStatus(StrEnum):

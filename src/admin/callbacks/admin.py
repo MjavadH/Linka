@@ -117,6 +117,21 @@ class AdminPremiumCallback(CallbackData, prefix="admin_prem"):
     key: str = ""
 
 
+class AdminBroadcastAction(StrEnum):
+    TARGET = "target"
+    START = "start"
+    CANCEL = "cancel"
+    STOP = "stop"
+    HISTORY = "history"
+    VIEW = "view"
+
+
+class AdminBroadcastCallback(CallbackData, prefix="admin_bc"):
+    action: AdminBroadcastAction
+    target: str = ""
+    job_id: int = 0
+
+
 class AdminUserAction(StrEnum):
     SEARCH = "search"
     VIEW = "view"
