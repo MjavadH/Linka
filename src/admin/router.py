@@ -1,7 +1,16 @@
 from aiogram import Router
 
 from admin.filters import AdminFilter
-from admin.handlers import broadcast, dashboard, files, premium, sponsors, statistics, users
+from admin.handlers import (
+    analytics,
+    broadcast,
+    dashboard,
+    files,
+    premium,
+    sponsors,
+    statistics,
+    users,
+)
 from admin.handlers import settings as settings_handlers
 from core.config import Settings
 
@@ -19,6 +28,7 @@ def create_admin_router(settings: Settings) -> Router:
         users.router,
         premium.router,
         broadcast.router,
+        analytics.router,
         statistics.router,
         settings_handlers.router,
     )

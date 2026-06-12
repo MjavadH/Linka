@@ -1,3 +1,4 @@
+from admin.keyboards.analytics import analytics_menu_keyboard, analytics_report_keyboard
 from admin.keyboards.broadcast import (
     broadcast_menu_keyboard,
     broadcast_preview_keyboard,
@@ -23,6 +24,8 @@ from admin.keyboards.menus import admin_section_keyboard
 from admin.keyboards.navigation import back_button, home_button, navigation_row, refresh_button
 
 __all__ = [
+    "analytics_menu_keyboard",
+    "analytics_report_keyboard",
     "admin_dashboard_keyboard",
     "admin_section_keyboard",
     "back_button",

@@ -10,6 +10,7 @@ class AdminSection(StrEnum):
     PREMIUM = "premium"
     BROADCAST = "broadcast"
     STATISTICS = "statistics"
+    ANALYTICS = "analytics"
     SETTINGS = "settings"
     USERS = "users"
 
@@ -150,3 +151,20 @@ class AdminUserCallback(CallbackData, prefix="admin_user"):
     action: AdminUserAction
     user_id: int = 0
     plan_id: int = 0
+
+class AdminAnalyticsAction(StrEnum):
+    MENU = "menu"
+    OVERVIEW = "overview"
+    USERS = "users"
+    PREMIUM = "premium"
+    DOWNLOADS = "downloads"
+    TOP_CONTENT = "top_content"
+    TOP_VARIANTS = "top_variants"
+    SERIES = "series"
+    SPONSORS = "sponsors"
+    BROADCASTS = "broadcasts"
+
+
+class AdminAnalyticsCallback(CallbackData, prefix="admin_an"):
+    action: AdminAnalyticsAction
+    page: int = 1
