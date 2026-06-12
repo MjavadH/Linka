@@ -21,8 +21,6 @@ def upgrade() -> None:
     subscription_source = sa.Enum("MANUAL", "PAYMENT_REQUEST", name="subscriptionsource")
     payment_status = sa.Enum("PENDING", "APPROVED", "REJECTED", name="paymentrequeststatus")
     temp_status = sa.Enum("PENDING", "DELETED", "FAILED", name="temporarymessagestatus")
-    broadcast_status = sa.Enum("DRAFT", "RUNNING", "PAUSED", "COMPLETED", "FAILED", name="broadcaststatus")
-    recipient_status = sa.Enum("PENDING", "SENT", "FAILED", name="broadcastrecipientstatus")
 
     op.create_table(
         "users",
@@ -65,16 +63,7 @@ def upgrade() -> None:
     op.create_index("ix_temporary_messages_delete_after", "temporary_messages", ["delete_after"])
     op.create_index("ix_temporary_messages_status", "temporary_messages", ["status"])
 
-    op.create_table("broadcasts", sa.Column("id", sa.Integer(), primary_key=True), sa.Column("kind", sa.String(50), nullable=False), sa.Column("payload", postgresql.JSONB(), nullable=False), sa.Column("status", broadcast_status, nullable=False), sa.Column("total_recipients", sa.Integer(), nullable=False, server_default="0"), sa.Column("sent_count", sa.Integer(), nullable=False, server_default="0"), sa.Column("failed_count", sa.Integer(), nullable=False, server_default="0"), sa.Column("cursor_user_id", sa.Integer()), sa.Column("failure_log", postgresql.JSONB(), nullable=False, server_default="[]"), sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False), sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False))
-    op.create_table("broadcast_recipients", sa.Column("id", sa.Integer(), primary_key=True), sa.Column("broadcast_id", sa.Integer(), sa.ForeignKey("broadcasts.id", ondelete="CASCADE"), nullable=False), sa.Column("telegram_id", sa.BigInteger(), nullable=False), sa.Column("status", recipient_status, nullable=False), sa.Column("message_id", sa.Integer()), sa.Column("error", sa.Text()), sa.Column("sent_at", sa.DateTime(timezone=True)))
-    op.create_index("ix_broadcast_recipients_broadcast_id", "broadcast_recipients", ["broadcast_id"])
-    op.create_index("ix_broadcast_recipients_telegram_id", "broadcast_recipients", ["telegram_id"])
-    op.create_index("ix_broadcast_recipients_status", "broadcast_recipients", ["status"])
-
-
 def downgrade() -> None:
-    op.drop_table("broadcast_recipients")
-    op.drop_table("broadcasts")
     op.drop_table("temporary_messages")
     op.drop_table("downloads")
     op.drop_table("payment_requests")
@@ -86,5 +75,5 @@ def downgrade() -> None:
     op.drop_table("file_variants")
     op.drop_table("files")
     op.drop_table("users")
-    for enum_name in ["broadcastrecipientstatus", "broadcaststatus", "temporarymessagestatus", "paymentrequeststatus", "subscriptionsource", "fileaccesslevel"]:
+    for enum_name in ["temporarymessagestatus", "paymentrequeststatus", "subscriptionsource", "fileaccesslevel"]:
         sa.Enum(name=enum_name).drop(op.get_bind(), checkfirst=True)

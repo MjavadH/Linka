@@ -17,19 +17,15 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    broadcast_status = sa.Enum("DRAFT", "RUNNING", "COMPLETED", "CANCELLED", "FAILED", name="broadcaststatus")
-    target_type = sa.Enum("ALL", "PREMIUM", "FREE", name="broadcasttargettype")
-    result_status = sa.Enum("PENDING", "SENT", "BLOCKED", "DELIVERY_ERROR", "FAILED", name="broadcastresultstatus")
-    broadcast_status.create(op.get_bind(), checkfirst=True)
-    op.execute("ALTER TYPE broadcaststatus ADD VALUE IF NOT EXISTS 'CANCELLED'")
-    target_type.create(op.get_bind(), checkfirst=True)
-    result_status.create(op.get_bind(), checkfirst=True)
+    op.execute("CREATE TYPE broadcaststatus AS ENUM ('DRAFT', 'RUNNING', 'COMPLETED', 'CANCELLED', 'FAILED');")
+    op.execute("CREATE TYPE broadcasttargettype AS ENUM ('ALL', 'PREMIUM', 'FREE');")
+    op.execute("CREATE TYPE broadcastresultstatus AS ENUM ('PENDING', 'SENT', 'BLOCKED', 'DELIVERY_ERROR', 'FAILED');")
 
     op.create_table(
         "broadcast_jobs",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("status", broadcast_status, nullable=False),
-        sa.Column("target_type", target_type, nullable=False),
+        sa.Column("status", postgresql.ENUM("DRAFT", "RUNNING", "COMPLETED", "CANCELLED", "FAILED", name="broadcaststatus", create_type=False), nullable=False),
+        sa.Column("target_type", postgresql.ENUM("ALL", "PREMIUM", "FREE", name="broadcasttargettype", create_type=False), nullable=False),
         sa.Column("payload", postgresql.JSONB(), nullable=False),
         sa.Column("admin_telegram_id", sa.BigInteger(), nullable=False),
         sa.Column("total_recipients", sa.Integer(), nullable=False, server_default="0"),
@@ -53,7 +49,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("job_id", sa.Integer(), sa.ForeignKey("broadcast_jobs.id", ondelete="CASCADE"), nullable=False),
         sa.Column("telegram_id", sa.BigInteger(), nullable=False),
-        sa.Column("status", result_status, nullable=False),
+        sa.Column("status", postgresql.ENUM("PENDING", "SENT", "BLOCKED", "DELIVERY_ERROR", "FAILED", name="broadcastresultstatus", create_type=False), nullable=False),
         sa.Column("message_id", sa.Integer(), nullable=True),
         sa.Column("error_code", sa.String(length=100), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -74,5 +70,5 @@ def downgrade() -> None:
     op.drop_index("ix_broadcast_jobs_target_type", table_name="broadcast_jobs")
     op.drop_index("ix_broadcast_jobs_status", table_name="broadcast_jobs")
     op.drop_table("broadcast_jobs")
-    for enum_name in ["broadcastresultstatus", "broadcasttargettype"]:
+    for enum_name in ["broadcaststatus", "broadcastresultstatus", "broadcasttargettype"]:
         sa.Enum(name=enum_name).drop(op.get_bind(), checkfirst=True)
