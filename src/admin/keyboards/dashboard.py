@@ -17,7 +17,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 _menu_button("📨 Broadcast", AdminSection.BROADCAST),
-                _menu_button("📊 Statistics", AdminSection.STATISTICS),
+                _menu_button("📊 Analytics", AdminSection.ANALYTICS),
             ],
             [
                 _menu_button("⚙️ Settings", AdminSection.SETTINGS),

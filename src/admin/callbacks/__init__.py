@@ -1,5 +1,7 @@
 from admin.callbacks.admin import (
     AdminAction,
+    AdminAnalyticsAction,
+    AdminAnalyticsCallback,
     AdminBroadcastAction,
     AdminBroadcastCallback,
     AdminFileAction,
@@ -18,6 +20,8 @@ from admin.callbacks.admin import (
 
 __all__ = [
     "AdminAction",
+    "AdminAnalyticsAction",
+    "AdminAnalyticsCallback",
     "AdminBroadcastAction",
     "AdminBroadcastCallback",
     "AdminFileAction",
