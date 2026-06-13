@@ -40,13 +40,13 @@ async def audit_detail(callback: CallbackQuery, session: AsyncSession, callback_
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH))
 async def audit_search(callback: CallbackQuery) -> None:
-    rows = [[_btn("📅 Date", AdminSystemAction.AUDIT_SEARCH_DATE)], [_btn("🆔 Log ID", AdminSystemAction.AUDIT_SEARCH_LOG_ID)], [_btn("👤 Admin", AdminSystemAction.AUDIT_SEARCH_ADMIN)], [home_button()]]
+    rows = [[_btn("📅 Date", AdminSystemAction.AUDIT_SEARCH_DATE)], [_btn("🆔 Log ID", AdminSystemAction.AUDIT_SEARCH_LOG_ID)], [_btn("👤 Admin", AdminSystemAction.AUDIT_SEARCH_ADMIN)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
     await _edit(callback, "🔍 <b>Audit Log Search</b>\n\nChoose a search method.", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_DATE))
 async def audit_search_date(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminSystemStates.waiting_for_search_date)
-    await _edit(callback, "📅 <b>Search by Date</b>\n\nSend date in YYYY/MM/DD format.\nExample: 2026/06/13", InlineKeyboardMarkup(inline_keyboard=[[home_button()]]))
+    await _edit(callback, "📅 <b>Search by Date</b>\n\nSend date in YYYY/MM/DD format.\nExample: 2026/06/13", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_date, F.text)
 async def receive_search_date(message: Message, state: FSMContext, session: AsyncSession) -> None:
@@ -69,7 +69,7 @@ async def audit_search_date_results(callback: CallbackQuery, session: AsyncSessi
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_LOG_ID))
 async def audit_search_log_id(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminSystemStates.waiting_for_search_log_id)
-    await _edit(callback, "🆔 <b>Search by Log ID</b>\n\nSend log id.\nExample: 1452", InlineKeyboardMarkup(inline_keyboard=[[home_button()]]))
+    await _edit(callback, "🆔 <b>Search by Log ID</b>\n\nSend log id.\nExample: 1452", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_log_id, F.text)
 async def receive_search_log_id(message: Message, state: FSMContext, session: AsyncSession) -> None:
@@ -85,25 +85,39 @@ async def receive_search_log_id(message: Message, state: FSMContext, session: As
 async def audit_search_admin(callback: CallbackQuery, session: AsyncSession) -> None:
     admins = await AuditLogService(AuditLogRepository(session)).list_admins()
     rows = [[InlineKeyboardButton(text=name, callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_FILTER_ADMIN, admin_id=admin_id).pack())] for admin_id, name in admins]
-    rows.append([home_button()])
+    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
     await _edit(callback, "👤 <b>Select Admin</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER))
 async def audit_filter(callback: CallbackQuery) -> None:
-    rows = [[_btn("👤 By Admin", AdminSystemAction.AUDIT_FILTER_ADMIN_MENU)], [_btn("⚡ By Action", AdminSystemAction.AUDIT_FILTER_ACTION_MENU)], [_btn("❌ Clear Filter", AdminSystemAction.AUDIT_CLEAR_FILTER)], [home_button()]]
+    rows = [[_btn("👤 By Admin", AdminSystemAction.AUDIT_FILTER_ADMIN_MENU)], [_btn("⚡ By Action", AdminSystemAction.AUDIT_FILTER_ACTION_MENU)], [_btn("❌ Clear Filter", AdminSystemAction.AUDIT_CLEAR_FILTER)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
     await _edit(callback, "🎯 <b>Filter</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ADMIN_MENU))
 async def audit_filter_admin_menu(callback: CallbackQuery, session: AsyncSession) -> None:
     admins = await AuditLogService(AuditLogRepository(session)).list_admins()
     rows = [[InlineKeyboardButton(text=name, callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_FILTER_ADMIN, admin_id=admin_id).pack())] for admin_id, name in admins]
-    rows.append([home_button()])
+    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
     await _edit(callback, "👤 <b>Filter By Admin</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ACTION_MENU))
 async def audit_filter_action_menu(callback: CallbackQuery) -> None:
-    rows = [[InlineKeyboardButton(text=a, callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_FILTER_ACTION, value=a).pack())] for a in TRACKED_AUDIT_ACTIONS]
-    rows.append([home_button()])
+    buttons = [
+        InlineKeyboardButton(
+            text=action,
+            callback_data=AdminSystemCallback(
+                action=AdminSystemAction.AUDIT_FILTER_ACTION,
+                value=action,
+            ).pack(),
+        )
+        for action in TRACKED_AUDIT_ACTIONS
+    ]
+
+    rows = [
+        buttons[i:i + 2]
+        for i in range(0, len(buttons), 2)
+    ]
+    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
     await _edit(callback, "⚡ <b>Filter By Action</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_CLEAR_FILTER))
@@ -146,8 +160,23 @@ async def _show_logs(callback: CallbackQuery, session: AsyncSession, *, page: in
     await _edit(callback, _logs_text(data), _logs_keyboard(data, admin_user_id=admin_user_id, action=action, day=day))
 
 def _logs_text(data) -> str:
-    return "📜 <b>Latest Audit Logs</b>" if data.items else "📜 <b>Latest Audit Logs</b>\n\nNo logs found."
+    if not data.items:
+        return "📜 <b>Latest Audit Logs</b>\n\nNo logs found."
 
+    lines = ["📜 <b>Latest Audit Logs</b>", ""]
+
+    for log in data.items:
+        admin = log.admin_full_name or log.admin_username or "Unknown"
+
+        lines.append(
+            f"#{log.id} - "
+            f"[{log.created_at:%Y-%m-%d %H:%M}] - "
+            f"{log.action} - "
+            f"{admin}"
+        )
+
+    return "\n".join(lines)
+    
 def _logs_keyboard(data, *, admin_user_id: int | None = None, action: str | None = None, day: datetime | None = None) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text=f"#{l.id}", callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_VIEW, log_id=l.id).pack()) for l in data.items[i:i+4]] for i in range(0, len(data.items), 4)]
     start = 0 if data.total == 0 else (data.page - 1) * data.per_page + 1; end = min(data.total, data.page * data.per_page)
