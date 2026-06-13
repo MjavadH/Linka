@@ -20,6 +20,8 @@ from admin.callbacks import (
 from admin.keyboards.navigation import navigation_row
 from admin.states.sponsors import AdminSponsorStates
 from repositories.sponsors import SponsorRepository
+from repositories.audit_logs import AuditLogRepository
+from services.audit_logs import AuditLogService
 
 router = Router(name="admin_sponsors")
 INVITE_LINK_RE = re.compile(r"^https://(?:t\.me|telegram\.me)/(?:\+[A-Za-z0-9_-]+|joinchat/[A-Za-z0-9_-]+|[A-Za-z0-9_]{5,})(?:/)?$")
@@ -173,6 +175,7 @@ async def receive_edit_invite_url(message: Message, state: FSMContext, session: 
         await state.clear()
         return
     await SponsorRepository(session).update_invite_url(sponsor, invite_url)
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Edit Sponsor", target_type="Sponsor", target_id=sponsor.id, details=sponsor.title)
     await state.clear()
     await message.answer("✅ Invite link updated.")
 
@@ -291,6 +294,7 @@ async def toggle_sponsor(
         return
     sponsor.is_active = callback_data.action == AdminSponsorAction.ACTIVATE
     await session.flush()
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Edit Sponsor", target_type="Sponsor", target_id=sponsor.id, details=f"{sponsor.title} {'activated' if sponsor.is_active else 'deactivated'}")
     await show_sponsor_details(callback, session, sponsor.id)
 
 
@@ -304,8 +308,10 @@ async def delete_sponsor(
     if sponsor is None:
         await callback.answer("Sponsor not found", show_alert=True)
         return
+    details = sponsor.title
     await session.delete(sponsor)
     await session.flush()
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Delete Sponsor", target_type="Sponsor", target_id=callback_data.sponsor_id, details=details)
     await show_sponsors(callback, session)
 
 
@@ -489,11 +495,12 @@ async def _persist_sponsor_from_state(
             await message.answer("Sponsor not found.")
         else:
             await repository.update_expiration(sponsor, expiration_type, expiration_value)
+            await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Edit Sponsor", target_type="Sponsor", target_id=sponsor.id, details=sponsor.title)
             await message.answer("✅ Sponsor expiration updated.")
         await state.clear()
         return
 
-    await repository.create(
+    sponsor = await repository.create(
         chat_id=int(data["chat_id"]),
         title=str(data["title"]),
         invite_url=str(data["invite_url"]),
@@ -502,5 +509,6 @@ async def _persist_sponsor_from_state(
         expiration_type=expiration_type,
         expiration_value=expiration_value,
     )
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Create Sponsor", target_type="Sponsor", target_id=sponsor.id, details=sponsor.title)
     await state.clear()
     await message.answer("✅ Sponsor added. It is active immediately and required for non-premium users.")

@@ -63,11 +63,26 @@ class HealthService:
         database = await self._check_database()
         archive = await self._check_archive()
         bot_api = await self._check_bot_api()
-        scheduler_ok = self.scheduler is not None
-        scheduler = ComponentStatus("Scheduler", scheduler_ok, "Running" if getattr(self.scheduler, "running", False) else "Initialized" if scheduler_ok else "Not initialized")
-        broadcast = ComponentStatus("Broadcast Queue", database.healthy, "Healthy" if database.healthy else "Database unavailable")
+        scheduler = self._check_scheduler()
+        broadcast = ComponentStatus("Broadcast Queue", database.healthy, "Healthy" if database.healthy else "Failed")
         self.last_report = HealthReport(database, scheduler, archive, broadcast, bot_api, checked_at)
         return self.last_report
+
+    def _check_scheduler(self) -> ComponentStatus:
+        if self.scheduler is None:
+            return ComponentStatus("Scheduler", False, "Failed")
+        running = bool(getattr(self.scheduler, "running", False))
+        if not running and getattr(self.scheduler, "state", None) == 1:
+            running = True
+        if not hasattr(self.scheduler, "get_jobs"):
+            return ComponentStatus("Scheduler", True, "Running")
+        try:
+            jobs = list(self.scheduler.get_jobs())
+        except Exception as exc:
+            logger.error("health_scheduler_failed", error=str(exc))
+            return ComponentStatus("Scheduler", False, "Failed")
+        healthy = running and bool(jobs)
+        return ComponentStatus("Scheduler", healthy, "Running" if healthy else "Failed")
 
     async def _check_database(self) -> ComponentStatus:
         try:

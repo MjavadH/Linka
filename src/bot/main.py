@@ -30,8 +30,9 @@ async def main() -> None:
     dispatcher.include_router(start_router)
 
     scheduler = setup_scheduler(bot, session_factory, settings)
-    await validate_startup(bot=bot, settings=settings, session_factory=session_factory, scheduler=scheduler)
+    dispatcher["scheduler"] = scheduler
     scheduler.start()
+    await validate_startup(bot=bot, settings=settings, session_factory=session_factory, scheduler=scheduler)
     try:
         await dispatcher.start_polling(bot)
     finally:

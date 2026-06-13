@@ -18,10 +18,12 @@ from admin.states.premium import AdminPremiumStates
 from core.config import Settings
 from handlers.premium import format_money
 from repositories.premium import PremiumPlanRepository
+from repositories.audit_logs import AuditLogRepository
 from repositories.settings import SettingsRepository
 from repositories.subscriptions import SubscriptionRepository
 from repositories.users import UserRepository
 from services.premium import PremiumService
+from services.audit_logs import AuditLogService
 from services.settings import PREMIUM_SETTING_KEYS, PremiumSettingsService
 
 router = Router(name="admin_premium")
@@ -96,12 +98,13 @@ async def receive_plan_price(message: Message, state: FSMContext) -> None:
 async def receive_plan_description(message: Message, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     description = (message.text or "").strip()
-    await PremiumPlanRepository(session).create(
+    plan = await PremiumPlanRepository(session).create(
         name=str(data["name"]),
         duration_days=int(data["duration_days"]),
         price=Decimal(str(data["price"])),
         description=None if description == "-" else description,
     )
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Create Premium Plan", target_type="Premium Plan", target_id=plan.id, details=f"{plan.name} ({plan.duration_days} Days)")
     await state.clear()
     await message.answer("✅ Premium plan created.")
 
@@ -148,6 +151,7 @@ async def receive_plan_edit(message: Message, state: FSMContext, session: AsyncS
         await state.clear()
         return
     await repo.update(plan, name=parts[0], duration_days=duration, price=price, description=None if parts[3] == "-" else parts[3])
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Edit Premium Plan", target_type="Premium Plan", target_id=plan.id, details=f"{plan.name} ({plan.duration_days} Days)")
     await state.clear()
     await message.answer("✅ Premium plan updated.")
 
@@ -160,6 +164,7 @@ async def toggle_plan(callback: CallbackQuery, callback_data: AdminPremiumCallba
         await callback.answer("Plan not found", show_alert=True)
         return
     await repo.update(plan, is_active=not plan.is_active)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Edit Premium Plan", target_type="Premium Plan", target_id=plan.id, details=f"{plan.name} ({plan.duration_days} Days)")
     await show_plan(callback, session, plan.id)
 
 
@@ -170,7 +175,9 @@ async def delete_plan(callback: CallbackQuery, callback_data: AdminPremiumCallba
     if plan is None:
         await callback.answer("Plan not found", show_alert=True)
         return
+    details = f"{plan.name} ({plan.duration_days} Days)"
     await repo.delete(plan)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Delete Premium Plan", target_type="Premium Plan", target_id=callback_data.plan_id, details=details)
     await show_plans(callback, session)
 
 
@@ -216,6 +223,7 @@ async def activate_grant(callback: CallbackQuery, callback_data: AdminPremiumCal
         return
     admin_user = await UserRepository(session).upsert_from_telegram(callback.from_user.id, callback.from_user.username, callback.from_user.first_name)
     subscription = await PremiumService(SubscriptionRepository(session), PremiumPlanRepository(session)).activate_subscription(int(data["user_id"]), plan, admin_user.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Grant Premium", target_type="User", target_id=int(data["telegram_id"]), details=f"{plan.name} ({plan.duration_days} Days)")
     await state.clear()
     if callback.bot is not None:
         await callback.bot.send_message(int(data["telegram_id"]), "✅ Premium subscription activated.")
@@ -259,6 +267,7 @@ async def edit_setting(callback: CallbackQuery, callback_data: AdminPremiumCallb
 async def receive_setting(message: Message, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     data = await state.get_data()
     await PremiumSettingsService(SettingsRepository(session), settings).set_value(str(data["key"]), (message.text or "").strip())
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Settings Change", target_type="Premium Settings", target_id=None, details=f"{data['key']} updated")
     await state.clear()
     await message.answer("✅ Premium setting updated.")
 
