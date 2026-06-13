@@ -16,6 +16,8 @@ from admin.callbacks.admin import (
     AdminSponsorCallback,
     AdminUserAction,
     AdminUserCallback,
+    AdminSystemAction,
+    AdminSystemCallback,
 )
 
 __all__ = [
@@ -36,4 +38,6 @@ __all__ = [
     "AdminSection",
     "AdminUserAction",
     "AdminUserCallback",
+    "AdminSystemAction",
+    "AdminSystemCallback",
 ]
