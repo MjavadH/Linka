@@ -12,6 +12,7 @@ from handlers.premium import router as premium_router
 from handlers.start import router as start_router
 from middlewares.database import DatabaseSessionMiddleware
 from scheduler.setup import setup_scheduler
+from services.system import validate_startup
 
 
 async def main() -> None:
@@ -29,6 +30,7 @@ async def main() -> None:
     dispatcher.include_router(start_router)
 
     scheduler = setup_scheduler(bot, session_factory, settings)
+    await validate_startup(bot=bot, settings=settings, session_factory=session_factory, scheduler=scheduler)
     scheduler.start()
     try:
         await dispatcher.start_polling(bot)

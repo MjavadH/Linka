@@ -24,6 +24,8 @@ from admin.states import AdminBroadcastStates
 from core.config import Settings
 from models.enums import BroadcastStatus, BroadcastTargetType
 from repositories.broadcasts import BroadcastRepository
+from repositories.audit_logs import AuditLogRepository
+from services.audit_logs import AuditLogService
 from services.broadcasts import (
     BroadcastPayload,
     broadcast_cancellations,
@@ -128,6 +130,7 @@ async def start_broadcast(
     admin_id = callback.from_user.id
     job = await repo.create_job(target_type=target, payload={"kind": payload.kind, **payload.data}, admin_telegram_id=admin_id, total_recipients=total)
     await session.flush()
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Broadcast Start", target_type="Broadcast", target_id=job.id, details=f"Target: {target_label(target)}; Recipients: {total}")
 
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -160,6 +163,7 @@ async def stop_broadcast(callback: CallbackQuery, callback_data: AdminBroadcastC
         return
     broadcast_cancellations.cancel(job.id)
     await repo.request_cancel(job)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Broadcast Cancel", target_type="Broadcast", target_id=job.id, details="Cancellation requested")
     await session.commit()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(format_progress(job))

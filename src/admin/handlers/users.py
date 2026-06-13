@@ -29,6 +29,8 @@ from models.user import User
 from models.user_ban import UserBan
 from repositories.premium import PremiumPlanRepository
 from repositories.users import UserRepository
+from repositories.audit_logs import AuditLogRepository
+from services.audit_logs import AuditLogService
 from services.user_messaging import UserMessagingService
 from services.users import ManagedUserDetails, build_user_management_service
 
@@ -101,6 +103,7 @@ async def grant_plan(callback: CallbackQuery, callback_data: AdminUserCallback, 
         return
     admin_user = user or await UserRepository(session).upsert_from_telegram(callback.from_user.id, callback.from_user.username, callback.from_user.first_name)
     subscription = await build_user_management_service(session).grant_plan(target.id, plan, admin_user.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Grant Premium", target_type="User", target_id=target.telegram_id, details=f"{plan.name} ({plan.duration_days} Days)")
     await _safe_notify(callback, target.telegram_id, "✅ Your premium subscription has been activated.")
     if isinstance(callback.message, Message):
         await callback.message.edit_text(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=user_detail_keyboard(target.id))
@@ -130,6 +133,7 @@ async def receive_custom_premium(message: Message, state: FSMContext, session: A
         return
     admin_user = await UserRepository(session).upsert_from_telegram(message.from_user.id, message.from_user.username, message.from_user.first_name)
     subscription = await build_user_management_service(session).grant_custom(target.id, days, admin_user.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Grant Premium", target_type="User", target_id=target.telegram_id, details=f"Custom ({days} Days)")
     await state.clear()
     if message.bot is not None:
         try:
@@ -146,6 +150,7 @@ async def remove_premium(callback: CallbackQuery, callback_data: AdminUserCallba
         await callback.answer("User not found", show_alert=True)
         return
     await build_user_management_service(session).remove_premium(target.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Remove Premium", target_type="User", target_id=target.telegram_id, details="Removed active subscription")
     await _safe_notify(callback, target.telegram_id, "⚠️ Your premium subscription has been removed by administration.")
     await _edit_user_details(callback, session, target.id, notice="✅ Premium removed.")
 
@@ -164,6 +169,7 @@ async def permanent_ban(callback: CallbackQuery, callback_data: AdminUserCallbac
         await callback.answer("User not found", show_alert=True)
         return
     await build_user_management_service(session).ban_permanent(target.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Ban User", target_type="User", target_id=target.telegram_id, details="Permanent ban")
     await _safe_notify(callback, target.telegram_id, "🚫 You have been banned by the administration.\n\nIf you believe this is a mistake,\nplease contact support.")
     await _edit_user_details(callback, session, target.id, notice="✅ User banned permanently.")
 
@@ -190,6 +196,7 @@ async def receive_temporary_ban(message: Message, state: FSMContext, session: As
         await state.clear()
         return
     await build_user_management_service(session).ban_temporary(target.id, days)
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Ban User", target_type="User", target_id=target.telegram_id, details=f"Temporary ban ({days} Days)")
     await state.clear()
     if message.bot is not None:
         try:
@@ -206,6 +213,7 @@ async def unban(callback: CallbackQuery, callback_data: AdminUserCallback, sessi
         await callback.answer("User not found", show_alert=True)
         return
     await build_user_management_service(session).unban(target.id)
+    await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Unban User", target_type="User", target_id=target.telegram_id, details="Access restored")
     await _safe_notify(callback, target.telegram_id, "✅ Your access to the bot has been restored.")
     await _edit_user_details(callback, session, target.id, notice="✅ User unbanned.")
 
