@@ -13,6 +13,7 @@ class AdminSection(StrEnum):
     ANALYTICS = "analytics"
     SETTINGS = "settings"
     USERS = "users"
+    SYSTEM = "system"
 
 
 class AdminAction(StrEnum):
@@ -168,3 +169,29 @@ class AdminAnalyticsAction(StrEnum):
 class AdminAnalyticsCallback(CallbackData, prefix="admin_an"):
     action: AdminAnalyticsAction
     page: int = 1
+
+class AdminSystemAction(StrEnum):
+    MENU = "menu"
+    AUDIT_LOGS = "audit_logs"
+    HEALTH = "health"
+    MAINTENANCE = "maintenance"
+    SETTINGS = "settings"
+    AUDIT_PAGE = "audit_page"
+    AUDIT_VIEW = "audit_view"
+    AUDIT_SEARCH = "audit_search"
+    AUDIT_FILTER = "audit_filter"
+    AUDIT_FILTER_ACTION = "audit_filter_action"
+    AUDIT_FILTER_ADMIN = "audit_filter_admin"
+    AUDIT_CLEAR_FILTER = "audit_clear_filter"
+    RUN_HEALTH = "run_health"
+    RECALC_STATS = "recalc_stats"
+    VALIDATE_LINKS = "validate_links"
+    CLEANUP_EXPIRED = "cleanup_expired"
+
+
+class AdminSystemCallback(CallbackData, prefix="admin_sys"):
+    action: AdminSystemAction
+    page: int = 1
+    log_id: int = 0
+    admin_id: int = 0
+    value: str = ""

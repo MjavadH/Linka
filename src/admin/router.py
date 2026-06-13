@@ -9,6 +9,7 @@ from admin.handlers import (
     premium,
     sponsors,
     statistics,
+    system,
     users,
 )
 from admin.handlers import settings as settings_handlers
@@ -31,5 +32,6 @@ def create_admin_router(settings: Settings) -> Router:
         analytics.router,
         statistics.router,
         settings_handlers.router,
+        system.router,
     )
     return router

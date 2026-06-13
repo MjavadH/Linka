@@ -21,6 +21,7 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 _menu_button("⚙️ Settings", AdminSection.SETTINGS),
+                _menu_button("🛠 System", AdminSection.SYSTEM),
             ],
             [refresh_button(AdminSection.DASHBOARD)],
         ]

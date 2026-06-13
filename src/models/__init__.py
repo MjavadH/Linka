@@ -1,3 +1,4 @@
+from models.audit_log import AuditLog
 from models.broadcast import Broadcast, BroadcastJob, BroadcastRecipient, BroadcastResult
 from models.download import Download
 from models.file import DeepLink, Episode, File, FileVariant, Series
@@ -10,6 +11,7 @@ from models.user import User
 from models.user_ban import UserBan
 
 __all__ = [
+    "AuditLog",
     "Broadcast",
     "BroadcastJob",
     "AppSetting",
