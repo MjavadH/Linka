@@ -4,10 +4,15 @@ from models.audit_log import AuditLog
 from repositories.audit_logs import AuditLogPage, AuditLogRepository
 
 TRACKED_AUDIT_ACTIONS = (
-    "Create Content", "Edit Content", "Delete Content",
+    "Create Movie", "Edit Movie", "Delete Movie",
+    "Create Series", "Edit Series", "Delete Series",
+    "Create Episode", "Edit Episode", "Delete Episode",
+    "Create Variant", "Edit Variant", "Delete Variant",
     "Create Sponsor", "Edit Sponsor", "Delete Sponsor",
+    "Create Premium Plan", "Edit Premium Plan", "Delete Premium Plan",
     "Grant Premium", "Remove Premium",
     "Ban User", "Unban User",
+    "Admin Message",
     "Broadcast Start", "Broadcast Cancel",
     "Settings Change",
 )

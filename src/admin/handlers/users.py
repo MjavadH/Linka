@@ -236,6 +236,7 @@ async def receive_message(message: Message, state: FSMContext, session: AsyncSes
         await state.clear()
         return
     delivered = await UserMessagingService(message.bot).send_direct_message(target.telegram_id, message.text or "")
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Admin Message", target_type="User", target_id=target.telegram_id, details=("Message sent successfully" if delivered else "Message delivery failed") + f"; Target Username: @{target.username or '-'}; Delivery Status: {'success' if delivered else 'failed'}; Message Sent Time: {datetime.now(UTC):%Y-%m-%d %H:%M:%S}")
     if delivered:
         await message.answer("✅ Message delivered.", reply_markup=user_detail_keyboard(target.id))
     else:

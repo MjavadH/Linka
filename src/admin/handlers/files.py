@@ -34,6 +34,7 @@ from admin.keyboards import (
 from admin.states.files import AdminFileStates
 from core.config import Settings
 from models.enums import StorageType
+from repositories.audit_logs import AuditLogRepository
 from repositories.files import (
     PAGE_SIZE,
     DeepLinkRepository,
@@ -42,6 +43,7 @@ from repositories.files import (
     FileVariantRepository,
     SeriesRepository,
 )
+from services.audit_logs import AuditLogService
 from services.files import (
     DeepLinkService,
     EpisodeService,
@@ -115,6 +117,7 @@ async def receive_series_name(message: Message, state: FSMContext, session: Asyn
         SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)
     ).create_series(_message_text(message).strip())
     await state.clear()
+    await _audit(session, message.from_user, "Create Series", "Series", series.id, series.name)
     await message.answer("✅ Series created.")
     await _send_series_detail_message(message, series.id, session)
 
@@ -180,6 +183,8 @@ async def finish_file_registration(
         stored=stored,
     )
     link = await link_service.get_or_create_for_variant(variant)
+    await _audit(session, callback.from_user, "Create Movie", "Movie", file.id, file.title)
+    await _audit(session, callback.from_user, "Create Variant", "Variant", variant.id, f"{file.title}\n{variant.quality}{' Premium' if variant.is_premium else ''}")
     await state.clear()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -255,7 +260,9 @@ async def show_deep_links(
 async def delete_file(
     callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession
 ) -> None:
+    file = await FileRepository(session).get_by_id(callback_data.file_id)
     await FileService(FileRepository(session), DeepLinkRepository(session)).soft_delete_file(callback_data.file_id)
+    await _audit(session, callback.from_user, "Delete Movie", "Movie", callback_data.file_id, file.title if file else str(callback_data.file_id))
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "🗑 File deleted. Download history and statistics were preserved; deep links are disabled.",
@@ -312,6 +319,7 @@ async def finish_variant_registration(
     link = await DeepLinkService(DeepLinkRepository(session), settings.bot_username).get_or_create_for_variant(
         variant
     )
+    await _audit(session, callback.from_user, "Create Variant", "Variant", variant.id, await _variant_details(session, variant.id))
     await state.clear()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -361,9 +369,10 @@ async def edit_file_title(callback: CallbackQuery, callback_data: AdminFileCallb
 async def save_file_title(message: Message, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     file_id = int(data["file_id"])
-    await FileService(FileRepository(session), DeepLinkRepository(session)).update_file(
+    file = await FileService(FileRepository(session), DeepLinkRepository(session)).update_file(
         file_id, title=_message_text(message).strip()
     )
+    await _audit(session, message.from_user, "Edit Movie", "Movie", file_id, file.title if file else str(file_id))
     await state.clear()
     await message.answer("✅ Title updated.")
     await _send_file_detail_message(message, file_id, session)
@@ -391,11 +400,12 @@ async def save_file_caption(message: Message, state: FSMContext, session: AsyncS
     data = await state.get_data()
     file_id = int(data["file_id"])
     caption = None if _message_text(message).strip() == "-" else _message_text(message)
-    await FileService(FileRepository(session), DeepLinkRepository(session)).update_file(
+    file = await FileService(FileRepository(session), DeepLinkRepository(session)).update_file(
         file_id,
         description=caption or "",
         caption_entities=_entities_to_json(message.entities),
     )
+    await _audit(session, message.from_user, "Edit Movie", "Movie", file_id, file.title if file else str(file_id))
     await state.clear()
     await message.answer("✅ Description/caption updated.")
     await _send_file_detail_message(message, file_id, session)
@@ -442,6 +452,7 @@ async def save_variant_quality(message: Message, state: FSMContext, session: Asy
     await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
         int(data["variant_id"]), quality=_message_text(message).strip()
     )
+    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
     await state.clear()
     await message.answer("✅ Variant quality updated.")
     if int(data.get("episode_id") or 0):
@@ -471,6 +482,7 @@ async def save_variant_premium(callback: CallbackQuery, session: AsyncSession) -
     await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, callback.bot), None)).update_variant(
         variant_id, is_premium=parts[1] == "1"
     )
+    await _audit(session, callback.from_user, "Edit Variant", "Variant", variant_id, await _variant_details(session, variant_id))
     if isinstance(callback.message, Message):
         if episode_id:
             await _edit_episode_detail_message(callback.message, episode_id, session)
@@ -504,6 +516,7 @@ async def save_variant_caption(message: Message, state: FSMContext, session: Asy
     await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
         int(data["variant_id"]), caption=caption or "", caption_entities=_entities_to_json(message.entities)
     )
+    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
     await state.clear()
     await message.answer("✅ Variant caption updated.")
     if int(data.get("episode_id") or 0):
@@ -544,6 +557,7 @@ async def save_variant_storage(message: Message, state: FSMContext, session: Asy
         archive_chat_id=_optional_int(values.get("archive_chat_id")),
         archive_message_id=_optional_int(values.get("archive_message_id")),
     )
+    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
     await state.clear()
     await message.answer("✅ Storage metadata updated.")
     if int(data.get("episode_id") or 0):
@@ -574,6 +588,7 @@ async def delete_variant(callback: CallbackQuery, callback_data: AdminFileCallba
     if variant is None:
         await callback.answer("Variant not found", show_alert=True)
         return
+    await _audit(session, callback.from_user, "Delete Variant", "Variant", variant.id, await _variant_details_from_obj(variant))
     if isinstance(callback.message, Message):
         if callback_data.episode_id:
             await _edit_episode_detail_message(callback.message, callback_data.episode_id, session)
@@ -619,9 +634,10 @@ async def edit_series(callback: CallbackQuery, callback_data: AdminFileCallback,
 async def save_series_name(message: Message, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     series_id = int(data["series_id"])
-    await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).update_series_name(
+    series = await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).update_series_name(
         series_id, _message_text(message).strip()
     )
+    await _audit(session, message.from_user, "Edit Series", "Series", series_id, series.name if series else str(series_id))
     await state.clear()
     await message.answer("✅ Series renamed.")
     await _send_series_detail_message(message, series_id, session)
@@ -629,9 +645,11 @@ async def save_series_name(message: Message, state: FSMContext, session: AsyncSe
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.DELETE_SERIES))
 async def delete_series(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    series = await SeriesRepository(session).get_by_id(callback_data.series_id)
     await SeriesService(SeriesRepository(session), EpisodeRepository(session), DeepLinkRepository(session)).soft_delete_series(
         callback_data.series_id
     )
+    await _audit(session, callback.from_user, "Delete Series", "Series", callback_data.series_id, series.name if series else str(callback_data.series_id))
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "🗑 Series deleted. Episodes and variants were disabled; download history was preserved.",
@@ -661,6 +679,7 @@ async def receive_episode_number(message: Message, state: FSMContext, session: A
         await state.clear()
         await message.answer("Series not found.")
         return
+    await _audit(session, message.from_user, "Create Episode", "Episode", episode.id, await _episode_details(session, episode.id))
     await state.update_data(file_id=episode.file_id, episode_id=episode.id)
     await state.set_state(AdminFileStates.waiting_for_variant_upload)
     await message.answer("Episode created. Now upload the document, video, or audio for this episode variant.")
@@ -707,15 +726,18 @@ async def save_episode_number(message: Message, state: FSMContext, session: Asyn
     if episode is None:
         await message.answer("Episode not found.")
         return
+    await _audit(session, message.from_user, "Edit Episode", "Episode", episode.id, await _episode_details(session, episode.id))
     await message.answer("✅ Episode number updated.")
     await _send_episode_detail_message(message, episode.id, session)
 
 
 @router.callback_query(AdminFileCallback.filter(F.action == AdminFileAction.DELETE_EPISODE))
 async def delete_episode(callback: CallbackQuery, callback_data: AdminFileCallback, session: AsyncSession) -> None:
+    details = await _episode_details(session, callback_data.episode_id)
     await EpisodeService(EpisodeRepository(session), SeriesRepository(session), DeepLinkRepository(session)).soft_delete_episode(
         callback_data.episode_id
     )
+    await _audit(session, callback.from_user, "Delete Episode", "Episode", callback_data.episode_id, details)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "🗑 Episode deleted. Episode variants were disabled; download history was preserved.",
@@ -1051,3 +1073,26 @@ def _optional_int(value: str | None) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+async def _audit(session: AsyncSession, admin: Any, action: str, target_type: str, target_id: int | None, details: str | None) -> None:
+    await AuditLogService(AuditLogRepository(session)).record(admin=admin, action=action, target_type=target_type, target_id=target_id, details=details)
+
+async def _variant_details(session: AsyncSession, variant_id: int) -> str:
+    variant = await FileVariantRepository(session).get_by_id(variant_id)
+    return await _variant_details_from_obj(variant) if variant is not None else str(variant_id)
+
+async def _variant_details_from_obj(variant: Any) -> str:
+    title = getattr(getattr(variant, "file", None), "title", None) or f"File {getattr(variant, 'file_id', '')}"
+    episode = getattr(variant, "episode", None)
+    if episode is not None:
+        series = getattr(episode, "series", None)
+        title = f"{getattr(series, 'name', title)} Episode {getattr(episode, 'number', '')}"
+    return f"{title}\n{getattr(variant, 'quality', '')}{' Premium' if getattr(variant, 'is_premium', False) else ''}"
+
+async def _episode_details(session: AsyncSession, episode_id: int) -> str:
+    episode = await EpisodeRepository(session).get_by_id(episode_id)
+    if episode is None:
+        return str(episode_id)
+    series = getattr(episode, "series", None)
+    return f"{getattr(series, 'name', 'Series')} Episode {episode.number}"

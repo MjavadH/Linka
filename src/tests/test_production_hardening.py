@@ -144,3 +144,44 @@ def test_cleanup_expired_records_query_model_supports_maintenance_operation() ->
     active = Subscription(user_id=2, is_active=True, expires_at=now + timedelta(days=1))
     records = [s for s in [expired, active] if s.is_active and s.expires_at <= now]
     assert records == [expired]
+
+
+def test_production_hardening_audit_actions_and_scheduler_jobs() -> None:
+    async def scenario() -> None:
+        service = AuditLogService(cast(Any, MemoryAuditRepo()))
+        admin = cast(Any, type("Admin", (), {"id": 10, "username": "ali", "full_name": "Ali"})())
+        required = [
+            "Create Movie", "Edit Movie", "Delete Movie", "Create Series", "Edit Series", "Delete Series",
+            "Create Episode", "Edit Episode", "Delete Episode", "Create Variant", "Edit Variant", "Delete Variant",
+            "Create Sponsor", "Edit Sponsor", "Delete Sponsor", "Create Premium Plan", "Edit Premium Plan",
+            "Delete Premium Plan", "Grant Premium", "Remove Premium", "Ban User", "Unban User",
+            "Admin Message", "Broadcast Start", "Broadcast Cancel", "Settings Change",
+        ]
+        for action in required:
+            await service.record(admin=admin, action=action, target_type="Target", target_id=1, details="details")
+        assert (await service.list_logs(action="Admin Message")).total == 1
+        assert (await service.list_logs(action="Create Premium Plan")).items[0].details == "details"
+
+        class Scheduler:
+            running = True
+            def get_jobs(self) -> list[object]:
+                return [object()]
+
+        class EmptyScheduler:
+            running = True
+            def get_jobs(self) -> list[object]:
+                return []
+
+        class Bot:
+            async def get_me(self) -> Any:
+                return type("Me", (), {"id": 99})()
+            async def get_chat_member(self, chat_id: int, user_id: int) -> Any:
+                return type("Member", (), {"status": "administrator"})()
+
+        settings = Settings(bot_token="1234567890:test-token", bot_username="linka_bot", database_url="postgresql+asyncpg://db", archive_chat_id=-100, admin_telegram_ids=(1,))
+        ok = await HealthService(bot=cast(Any, Bot()), settings=settings, session_factory=cast(Any, FakeFactory()), scheduler=Scheduler()).check()
+        failed = await HealthService(bot=cast(Any, Bot()), settings=settings, session_factory=cast(Any, FakeFactory()), scheduler=EmptyScheduler()).check()
+        assert ok.scheduler.healthy and ok.scheduler.detail == "Running"
+        assert not failed.scheduler.healthy and failed.scheduler.detail == "Failed"
+
+    asyncio.run(scenario())
