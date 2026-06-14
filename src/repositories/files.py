@@ -251,7 +251,15 @@ class FileVariantRepository(BaseRepository[FileVariant]):
         return variant
 
     async def get_by_id(self, variant_id: int) -> FileVariant | None:
-        result = await self.session.execute(select(FileVariant).where(FileVariant.id == variant_id))
+        result = await self.session.execute(
+            select(FileVariant)
+            .options(
+                selectinload(FileVariant.file),
+                selectinload(FileVariant.episode)
+                .selectinload(Episode.series)
+            )
+            .where(FileVariant.id == variant_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_default_for_file(self, file_id: int) -> FileVariant | None:
