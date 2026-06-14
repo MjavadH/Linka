@@ -19,6 +19,8 @@ from admin.keyboards.files import (
     series_list_keyboard,
     variant_edit_keyboard,
     variant_selection_keyboard,
+    cancel_to_files_keyboard,
+    cancel_action_keyboard,
 )
 from admin.keyboards.menus import admin_section_keyboard
 from admin.keyboards.navigation import back_button, home_button, navigation_row
@@ -47,4 +49,6 @@ __all__ = [
     "series_list_keyboard",
     "variant_edit_keyboard",
     "variant_selection_keyboard",
+    "cancel_to_files_keyboard",
+    "cancel_action_keyboard",
 ]

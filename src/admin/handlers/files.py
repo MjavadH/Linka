@@ -30,6 +30,8 @@ from admin.keyboards import (
     series_list_keyboard,
     variant_edit_keyboard,
     variant_selection_keyboard,
+    cancel_to_files_keyboard,
+    cancel_action_keyboard,
 )
 from admin.states.files import AdminFileStates
 from core.config import Settings
@@ -98,7 +100,7 @@ async def add_movie(callback: CallbackQuery, state: FSMContext, settings: Settin
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "📁 <b>Add Movie</b>\n\nSend a Telegram document, video, or audio file.",
-            reply_markup=file_management_keyboard(),
+            reply_markup=cancel_to_files_keyboard(),
         )
     await callback.answer()
 
@@ -107,7 +109,10 @@ async def add_movie(callback: CallbackQuery, state: FSMContext, settings: Settin
 async def add_series(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFileStates.waiting_for_series_name)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("📺 <b>Add Series</b>\n\nSend the series name.")
+        await callback.message.edit_text(
+            "📺 <b>Add Series</b>\n\nSend the series name.",
+            reply_markup=cancel_to_files_keyboard(),
+        )
     await callback.answer()
 
 
@@ -209,7 +214,10 @@ async def list_files(
 async def search_files(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFileStates.waiting_for_search)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("🔍 Send a movie title, series name, or filename search query.")
+        await callback.message.edit_text(
+            "🔍 Send a movie title, series name, or filename search query.",
+            reply_markup=cancel_to_files_keyboard()
+        )
     await callback.answer()
 
 
@@ -276,7 +284,11 @@ async def add_variant(callback: CallbackQuery, callback_data: AdminFileCallback,
     await state.update_data(file_id=callback_data.file_id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_variant_upload)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("➕ Send the document, video, or audio for the new variant.")
+        back_action = AdminFileAction.VIEW_EPISODE if callback_data.episode_id else AdminFileAction.VIEW
+        await callback.message.edit_text(
+            "➕ Send the document, video, or audio for the new variant.",
+            reply_markup=cancel_action_keyboard(back_action, file_id=callback_data.file_id,series_id=callback_data.series_id, episode_id=callback_data.episode_id)
+        )
     await callback.answer()
 
 
@@ -290,7 +302,10 @@ async def receive_variant_upload(message: Message, state: FSMContext, settings: 
     )
     await state.update_data(stored_file=_stored_to_state(stored))
     await state.set_state(AdminFileStates.waiting_for_variant_quality)
-    await message.answer("Send the quality/variant label for this upload.")
+    await message.answer(
+        "Send the quality/variant label for this upload.",
+        reply_markup=cancel_to_files_keyboard()
+    )
 
 
 @router.message(AdminFileStates.waiting_for_variant_quality, F.text)
@@ -360,7 +375,8 @@ async def edit_file_title(callback: CallbackQuery, callback_data: AdminFileCallb
     await state.set_state(AdminFileStates.waiting_for_edit_title)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
-            f"Current title: <b>{escape(file.title)}</b>\n\nSend the new title."
+            f"Current title: <b>{escape(file.title)}</b>\n\nSend the new title.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.VIEW, file_id=file.id)
         )
     await callback.answer()
 
@@ -390,7 +406,8 @@ async def edit_file_caption(callback: CallbackQuery, callback_data: AdminFileCal
         await callback.message.edit_text(
             "Current description/caption:\n"
             f"<blockquote>{escape(file.description or '—')}</blockquote>\n\n"
-            "Send the new description/caption. Formatting will be preserved. Send '-' to clear."
+            "Send the new description/caption. Formatting will be preserved. Send '-' to clear.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.VIEW, file_id=file.id)
         )
     await callback.answer()
 
@@ -441,7 +458,10 @@ async def edit_variant_quality(callback: CallbackQuery, callback_data: AdminFile
     await state.update_data(file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
     await state.set_state(AdminFileStates.waiting_for_edit_variant_quality)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"Current quality: <b>{escape(variant.quality)}</b>\n\nSend the new quality label.")
+        await callback.message.edit_text(
+            f"Current quality: <b>{escape(variant.quality)}</b>\n\nSend the new quality label.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.EDIT_VARIANT, file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
+        )
     await callback.answer()
 
 
@@ -503,7 +523,8 @@ async def edit_variant_caption(callback: CallbackQuery, callback_data: AdminFile
         await callback.message.edit_text(
             "Current variant caption:\n"
             f"<blockquote>{escape(variant.caption or 'inherits parent caption')}</blockquote>\n\n"
-            "Send the new variant caption. Formatting will be preserved. Send '-' to clear/inherit parent."
+            "Send the new variant caption. Formatting will be preserved. Send '-' to clear/inherit parent.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.EDIT_VARIANT, file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
         )
     await callback.answer()
 
@@ -540,7 +561,8 @@ async def edit_variant_storage(callback: CallbackQuery, callback_data: AdminFile
             f"telegram_file_id=<code>{escape(variant.telegram_file_id or '')}</code>\n"
             f"archive_chat_id=<code>{variant.archive_chat_id or ''}</code>\n"
             f"archive_message_id=<code>{variant.archive_message_id or ''}</code>\n\n"
-            "Send replacement values as key=value lines. Omit fields you do not want to change."
+            "Send replacement values as key=value lines. Omit fields you do not want to change.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.EDIT_VARIANT, file_id=variant.file_id, variant_id=variant.id, series_id=callback_data.series_id, episode_id=callback_data.episode_id)
         )
     await callback.answer()
 
@@ -626,7 +648,10 @@ async def edit_series(callback: CallbackQuery, callback_data: AdminFileCallback,
     await state.update_data(series_id=series.id)
     await state.set_state(AdminFileStates.waiting_for_edit_series_name)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"Current series name: <b>{escape(series.name)}</b>\n\nSend the new series name.")
+        await callback.message.edit_text(
+            f"Current series name: <b>{escape(series.name)}</b>\n\nSend the new series name.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.VIEW_SERIES, series_id=series.id)
+        )
     await callback.answer()
 
 
@@ -665,7 +690,10 @@ async def add_episode(callback: CallbackQuery, callback_data: AdminFileCallback,
     await state.update_data(series_id=callback_data.series_id)
     await state.set_state(AdminFileStates.waiting_for_episode_number)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("➕ <b>Add Episode</b>\n\nEnter episode number, for example: 5, 6.1, or 55.")
+        await callback.message.edit_text(
+            "➕ <b>Add Episode</b>\n\nEnter episode number, for example: 5, 6.1, or 55.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.VIEW_SERIES, series_id=callback_data.series_id)
+        )
     await callback.answer()
 
 
@@ -682,7 +710,10 @@ async def receive_episode_number(message: Message, state: FSMContext, session: A
     await _audit(session, message.from_user, "Create Episode", "Episode", episode.id, await _episode_details(session, episode.id))
     await state.update_data(file_id=episode.file_id, episode_id=episode.id)
     await state.set_state(AdminFileStates.waiting_for_variant_upload)
-    await message.answer("Episode created. Now upload the document, video, or audio for this episode variant.")
+    await message.answer(
+        "Episode created. Now upload the document, video, or audio for this episode variant.",
+        reply_markup=cancel_action_keyboard(AdminFileAction.VIEW_EPISODE, series_id=int(data["series_id"]), episode_id=episode.id)
+    )
 
 
 @router.callback_query(AdminFileCallback.filter(F.action.in_({AdminFileAction.EPISODES, AdminFileAction.EPISODES_PAGE})))
@@ -712,7 +743,10 @@ async def edit_episode(callback: CallbackQuery, callback_data: AdminFileCallback
     await state.update_data(episode_id=episode.id)
     await state.set_state(AdminFileStates.waiting_for_edit_episode_number)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"Current episode number: <b>{escape(episode.number)}</b>\n\nSend the new episode number.")
+        await callback.message.edit_text(
+            f"Current episode number: <b>{escape(episode.number)}</b>\n\nSend the new episode number.",
+            reply_markup=cancel_action_keyboard(AdminFileAction.VIEW_EPISODE, series_id=callback_data.series_id, episode_id=episode.id)
+        )
     await callback.answer()
 
 

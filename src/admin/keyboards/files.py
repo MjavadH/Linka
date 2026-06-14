@@ -161,3 +161,11 @@ def premium_choice_keyboard(file_id: int = 0, variant_id: int = 0, series_id: in
         ],
         navigation_row(back_to=AdminSection.FILES),
     ])
+
+def cancel_to_files_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[navigation_row(back_to=AdminSection.FILES)])
+
+def cancel_action_keyboard(action: AdminFileAction, **kwargs) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Cancel", callback_data=AdminFileCallback(action=action, **kwargs).pack())]
+    ])
