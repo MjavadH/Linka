@@ -40,13 +40,13 @@ async def audit_detail(callback: CallbackQuery, session: AsyncSession, callback_
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH))
 async def audit_search(callback: CallbackQuery) -> None:
-    rows = [[_btn("📅 Date", AdminSystemAction.AUDIT_SEARCH_DATE)], [_btn("🆔 Log ID", AdminSystemAction.AUDIT_SEARCH_LOG_ID)], [_btn("👤 Admin", AdminSystemAction.AUDIT_SEARCH_ADMIN)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
+    rows = [[_btn("📅 Date", AdminSystemAction.AUDIT_SEARCH_DATE)], [_btn("🆔 Log ID", AdminSystemAction.AUDIT_SEARCH_LOG_ID)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
     await _edit(callback, "🔍 <b>Audit Log Search</b>\n\nChoose a search method.", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_DATE))
 async def audit_search_date(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminSystemStates.waiting_for_search_date)
-    await _edit(callback, "📅 <b>Search by Date</b>\n\nSend date in YYYY/MM/DD format.\nExample: 2026/06/13", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]))
+    await _edit(callback, "📅 <b>Search by Date</b>\n\nSend date in YYYY/MM/DD format.\nExample: 2026/06/13", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_SEARCH)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_date, F.text)
 async def receive_search_date(message: Message, state: FSMContext, session: AsyncSession) -> None:
@@ -69,7 +69,7 @@ async def audit_search_date_results(callback: CallbackQuery, session: AsyncSessi
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_LOG_ID))
 async def audit_search_log_id(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminSystemStates.waiting_for_search_log_id)
-    await _edit(callback, "🆔 <b>Search by Log ID</b>\n\nSend log id.\nExample: 1452", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]))
+    await _edit(callback, "🆔 <b>Search by Log ID</b>\n\nSend log id.\nExample: 1452", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_SEARCH)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_log_id, F.text)
 async def receive_search_log_id(message: Message, state: FSMContext, session: AsyncSession) -> None:
@@ -81,24 +81,17 @@ async def receive_search_log_id(message: Message, state: FSMContext, session: As
         await message.answer("Audit log not found."); return
     await message.answer(("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{log.created_at:%Y-%m-%d %H:%M}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nAction:\n{log.action}\n\nTarget:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
 
-@router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_ADMIN))
-async def audit_search_admin(callback: CallbackQuery, session: AsyncSession) -> None:
-    admins = await AuditLogService(AuditLogRepository(session)).list_admins()
-    rows = [[InlineKeyboardButton(text=name, callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_FILTER_ADMIN, admin_id=admin_id).pack())] for admin_id, name in admins]
-    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
-    await _edit(callback, "👤 <b>Select Admin</b>", InlineKeyboardMarkup(inline_keyboard=rows))
-
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER))
 async def audit_filter(callback: CallbackQuery) -> None:
-    rows = [[_btn("👤 By Admin", AdminSystemAction.AUDIT_FILTER_ADMIN_MENU)], [_btn("⚡ By Action", AdminSystemAction.AUDIT_FILTER_ACTION_MENU)], [_btn("❌ Clear Filter", AdminSystemAction.AUDIT_CLEAR_FILTER)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
+    rows = [[_btn("👤 By Admin", AdminSystemAction.AUDIT_FILTER_ADMIN_MENU), _btn("⚡ By Action", AdminSystemAction.AUDIT_FILTER_ACTION_MENU)], [_btn("❌ Clear Filter", AdminSystemAction.AUDIT_CLEAR_FILTER)], [home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)]]
     await _edit(callback, "🎯 <b>Filter</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ADMIN_MENU))
 async def audit_filter_admin_menu(callback: CallbackQuery, session: AsyncSession) -> None:
     admins = await AuditLogService(AuditLogRepository(session)).list_admins()
     rows = [[InlineKeyboardButton(text=name, callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_FILTER_ADMIN, admin_id=admin_id).pack())] for admin_id, name in admins]
-    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
-    await _edit(callback, "👤 <b>Filter By Admin</b>", InlineKeyboardMarkup(inline_keyboard=rows))
+    rows.append([home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_FILTER)])
+    await _edit(callback, "👤 <b>Select Admin</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ACTION_MENU))
 async def audit_filter_action_menu(callback: CallbackQuery) -> None:
@@ -117,7 +110,7 @@ async def audit_filter_action_menu(callback: CallbackQuery) -> None:
         buttons[i:i + 2]
         for i in range(0, len(buttons), 2)
     ]
-    rows.append([home_button(), _btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)])
+    rows.append([home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_FILTER)])
     await _edit(callback, "⚡ <b>Filter By Action</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_CLEAR_FILTER))
