@@ -26,7 +26,7 @@ def analytics_menu_keyboard() -> InlineKeyboardMarkup:
             [
                 _button("📺 Series Analytics", AdminAnalyticsAction.SERIES),
             ],
-            navigation_row(refresh=AdminSection.ANALYTICS),
+            navigation_row(),
         ]
     )
 
@@ -40,7 +40,7 @@ def analytics_report_keyboard(action: AdminAnalyticsAction, page: int = 1, has_n
         nav.append(InlineKeyboardButton(text="➡️ Next", callback_data=AdminAnalyticsCallback(action=action, page=page + 1).pack()))
     if nav:
         rows.append(nav)
-    rows.append(navigation_row(back_to=AdminSection.ANALYTICS, refresh=AdminSection.ANALYTICS))
+    rows.append(navigation_row(back_to=AdminSection.ANALYTICS))
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -34,7 +34,7 @@ async def open_premium(callback: CallbackQuery) -> None:
     await show_premium(callback)
 
 
-@router.callback_query(AdminNavigationCallback.filter((F.target == AdminSection.PREMIUM) & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))))
+@router.callback_query(AdminNavigationCallback.filter((F.target == AdminSection.PREMIUM) & (F.action.in_({AdminNavAction.BACK}))))
 async def navigate_premium(callback: CallbackQuery) -> None:
     await show_premium(callback)
 
@@ -244,7 +244,7 @@ async def premium_stats(callback: CallbackQuery, session: AsyncSession) -> None:
         f"Most popular plan: <b>{stats.most_popular_plan}</b>"
     )
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[navigation_row(back_to=AdminSection.PREMIUM, refresh=AdminSection.PREMIUM)]))
+        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[navigation_row(back_to=AdminSection.PREMIUM)]))
     await callback.answer()
 
 
@@ -278,7 +278,7 @@ async def show_premium(callback: CallbackQuery) -> None:
         [InlineKeyboardButton(text="🎁 Grant Premium", callback_data=AdminPremiumCallback(action=AdminPremiumAction.GRANT).pack())],
         [InlineKeyboardButton(text="📊 Premium Statistics", callback_data=AdminPremiumCallback(action=AdminPremiumAction.STATS).pack())],
         [InlineKeyboardButton(text="⚙️ Payment Settings", callback_data=AdminPremiumCallback(action=AdminPremiumAction.SETTINGS).pack())],
-        navigation_row(refresh=AdminSection.PREMIUM),
+        navigation_row(),
     ])
     if isinstance(callback.message, Message):
         await callback.message.edit_text("⭐ <b>Premium</b>\n\nManage plans, manual activations, payment settings, and subscription audits.", reply_markup=keyboard)
@@ -289,7 +289,7 @@ async def show_plans(callback: CallbackQuery, session: AsyncSession) -> None:
     plans = await PremiumPlanRepository(session).list_all()
     rows = [[InlineKeyboardButton(text="➕ Create Plan", callback_data=AdminPremiumCallback(action=AdminPremiumAction.PLAN_ADD).pack())]]
     rows.extend([[InlineKeyboardButton(text=f"{'✅' if plan.is_active else '⛔'} {plan.name}", callback_data=AdminPremiumCallback(action=AdminPremiumAction.PLAN_VIEW, plan_id=plan.id).pack())] for plan in plans])
-    rows.append(navigation_row(back_to=AdminSection.PREMIUM, refresh=AdminSection.PREMIUM))
+    rows.append(navigation_row(back_to=AdminSection.PREMIUM))
     body = "No plans configured." if not plans else "Select a plan to manage it."
     if isinstance(callback.message, Message):
         await callback.message.edit_text(f"📋 <b>Premium Plans</b>\n\n{body}", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
@@ -326,7 +326,7 @@ async def show_settings(callback: CallbackQuery, session: AsyncSession, settings
     )
     labels = dict(zip(PREMIUM_SETTING_KEYS, ["Admin Username", "Card Holder", "Card Number", "Crypto Wallet", "Crypto Network", "Support Text"], strict=True))
     rows = [[InlineKeyboardButton(text=f"✏️ {label}", callback_data=AdminPremiumCallback(action=AdminPremiumAction.SETTING_EDIT, key=key).pack())] for key, label in labels.items()]
-    rows.append(navigation_row(back_to=AdminSection.PREMIUM, refresh=AdminSection.PREMIUM))
+    rows.append(navigation_row(back_to=AdminSection.PREMIUM))
     if isinstance(callback.message, Message):
         await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer()

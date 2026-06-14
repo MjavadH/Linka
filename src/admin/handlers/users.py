@@ -45,7 +45,7 @@ async def open_users(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(
     AdminNavigationCallback.filter(
-        (F.target == AdminSection.USERS) & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        (F.target == AdminSection.USERS) & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_users(callback: CallbackQuery, state: FSMContext) -> None:

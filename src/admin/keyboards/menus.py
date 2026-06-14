@@ -6,5 +6,5 @@ from admin.keyboards.navigation import navigation_row
 
 def admin_section_keyboard(section: AdminSection) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[navigation_row(refresh=section)],
+        inline_keyboard=[navigation_row()],
     )

@@ -71,7 +71,7 @@ async def open_files(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(
     AdminNavigationCallback.filter(
-        (F.target == AdminSection.FILES) & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        (F.target == AdminSection.FILES) & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_files(callback: CallbackQuery, state: FSMContext) -> None:

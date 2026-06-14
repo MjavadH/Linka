@@ -19,18 +19,9 @@ def home_button() -> InlineKeyboardButton:
         ).pack(),
     )
 
-
-def refresh_button(target: AdminSection) -> InlineKeyboardButton:
-    return InlineKeyboardButton(
-        text="🔄 Refresh",
-        callback_data=AdminNavigationCallback(action=AdminNavAction.REFRESH, target=target).pack(),
-    )
-
-
 def navigation_row(
     *,
     back_to: AdminSection | None = AdminSection.DASHBOARD,
-    refresh: AdminSection | None = None,
     include_home: bool = True,
 ) -> list[InlineKeyboardButton]:
     buttons: list[InlineKeyboardButton] = []
@@ -38,7 +29,5 @@ def navigation_row(
         buttons.append(back_button(back_to))
     if include_home:
         buttons.append(home_button())
-    if refresh is not None:
-        buttons.append(refresh_button(refresh))
     return buttons
 

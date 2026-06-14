@@ -18,15 +18,21 @@ async def open_dashboard(message: Message, session: AsyncSession) -> None:
 
 @router.callback_query(
     AdminNavigationCallback.filter(
-        (F.action.in_({AdminNavAction.BACK, AdminNavAction.HOME, AdminNavAction.REFRESH}))
+        (F.action.in_({AdminNavAction.BACK, AdminNavAction.HOME}))
         & (F.target == AdminSection.DASHBOARD)
     )
 )
-async def refresh_dashboard(callback: CallbackQuery, session: AsyncSession) -> None:
-    stats = await AdminDashboardService(session).get_stats()
-    await _edit_callback_message(callback, _dashboard_text(stats))
-    await callback.answer()
 
+async def navigate_dashboard(
+    callback: CallbackQuery,
+    session: AsyncSession,
+) -> None:
+    stats = await AdminDashboardService(session).get_stats()
+    await _edit_callback_message(
+        callback,
+        _dashboard_text(stats),
+    )
+    await callback.answer()
 
 async def _edit_callback_message(callback: CallbackQuery, text: str) -> None:
     if isinstance(callback.message, Message):

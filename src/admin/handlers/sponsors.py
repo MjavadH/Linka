@@ -35,7 +35,7 @@ async def open_sponsors(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(
     AdminNavigationCallback.filter(
         (F.target == AdminSection.SPONSORS)
-        & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_sponsors(callback: CallbackQuery, session: AsyncSession) -> None:
@@ -337,7 +337,7 @@ async def show_sponsors(callback: CallbackQuery, session: AsyncSession) -> None:
                 )
             ]
         )
-    keyboard_rows.append(navigation_row(refresh=AdminSection.SPONSORS))
+    keyboard_rows.append(navigation_row())
 
     if isinstance(callback.message, Message):
         await callback.message.edit_text(

@@ -37,7 +37,7 @@ async def open_analytics(callback: CallbackQuery) -> None:
 @router.callback_query(
     AdminNavigationCallback.filter(
         (F.target == AdminSection.ANALYTICS)
-        & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_analytics(callback: CallbackQuery) -> None:

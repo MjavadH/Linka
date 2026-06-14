@@ -23,7 +23,6 @@ class AdminAction(StrEnum):
 class AdminNavAction(StrEnum):
     HOME = "home"
     BACK = "back"
-    REFRESH = "refresh"
 
 
 class AdminMenuCallback(CallbackData, prefix="admin"):
@@ -181,7 +180,6 @@ class AdminSystemAction(StrEnum):
     AUDIT_SEARCH = "audit_search"
     AUDIT_SEARCH_DATE = "audit_search_date"
     AUDIT_SEARCH_LOG_ID = "audit_search_log_id"
-    AUDIT_SEARCH_ADMIN = "audit_search_admin"
     AUDIT_SEARCH_DATE_RESULTS = "audit_search_date_results"
     AUDIT_FILTER = "audit_filter"
     AUDIT_FILTER_ACTION_MENU = "audit_filter_action_menu"

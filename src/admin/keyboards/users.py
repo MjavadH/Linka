@@ -10,7 +10,7 @@ def user_management_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔍 Search User", callback_data=AdminUserCallback(action=AdminUserAction.SEARCH).pack())],
-            navigation_row(refresh=AdminSection.USERS),
+            navigation_row(),
         ]
     )
 
@@ -44,7 +44,6 @@ def user_detail_keyboard(user_id: int) -> InlineKeyboardMarkup:
             [
                 back_button(AdminSection.USERS),
                 home_button(),
-                InlineKeyboardButton(text="🔄 Refresh", callback_data=AdminUserCallback(action=AdminUserAction.VIEW, user_id=user_id).pack()),
             ],
         ]
     )

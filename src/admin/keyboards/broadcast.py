@@ -32,7 +32,7 @@ def broadcast_menu_keyboard() -> InlineKeyboardMarkup:
                     callback_data=AdminBroadcastCallback(action=AdminBroadcastAction.HISTORY).pack(),
                 )
             ],
-            navigation_row(refresh=AdminSection.BROADCAST),
+            navigation_row(),
         ]
     )
 
@@ -61,5 +61,5 @@ def history_keyboard(job_ids: list[int]) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=f"Details #{job_id}", callback_data=AdminBroadcastCallback(action=AdminBroadcastAction.VIEW, job_id=job_id).pack())]
         for job_id in job_ids
     ]
-    rows.append(navigation_row(back_to=AdminSection.BROADCAST, refresh=AdminSection.BROADCAST))
+    rows.append(navigation_row(back_to=AdminSection.BROADCAST))
     return InlineKeyboardMarkup(inline_keyboard=rows)

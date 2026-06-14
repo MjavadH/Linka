@@ -1,7 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from admin.callbacks import AdminMenuCallback, AdminSection
-from admin.keyboards.navigation import refresh_button
 
 
 def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
@@ -23,7 +22,6 @@ def admin_dashboard_keyboard() -> InlineKeyboardMarkup:
                 _menu_button("⚙️ Settings", AdminSection.SETTINGS),
                 _menu_button("🛠 System", AdminSection.SYSTEM),
             ],
-            [refresh_button(AdminSection.DASHBOARD)],
         ]
     )
 

@@ -17,7 +17,7 @@ async def open_statistics(callback: CallbackQuery, session: AsyncSession) -> Non
 @router.callback_query(
     AdminNavigationCallback.filter(
         (F.target == AdminSection.STATISTICS)
-        & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_statistics(callback: CallbackQuery, session: AsyncSession) -> None:

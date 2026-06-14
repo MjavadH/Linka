@@ -21,7 +21,7 @@ from admin.keyboards.files import (
     variant_selection_keyboard,
 )
 from admin.keyboards.menus import admin_section_keyboard
-from admin.keyboards.navigation import back_button, home_button, navigation_row, refresh_button
+from admin.keyboards.navigation import back_button, home_button, navigation_row
 
 __all__ = [
     "analytics_menu_keyboard",
@@ -42,7 +42,6 @@ __all__ = [
     "home_button",
     "navigation_row",
     "premium_choice_keyboard",
-    "refresh_button",
     "stop_broadcast_keyboard",
     "series_detail_keyboard",
     "series_list_keyboard",

@@ -17,7 +17,7 @@ async def open_settings(callback: CallbackQuery, settings: Settings) -> None:
 @router.callback_query(
     AdminNavigationCallback.filter(
         (F.target == AdminSection.SETTINGS)
-        & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_settings(callback: CallbackQuery, settings: Settings) -> None:

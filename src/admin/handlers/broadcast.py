@@ -48,7 +48,7 @@ async def open_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(
     AdminNavigationCallback.filter(
         (F.target == AdminSection.BROADCAST)
-        & (F.action.in_({AdminNavAction.BACK, AdminNavAction.REFRESH}))
+        & (F.action.in_({AdminNavAction.BACK}))
     )
 )
 async def navigate_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
