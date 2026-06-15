@@ -106,11 +106,15 @@ Linka solves these problems with a single self-hosted bot.
 
 ### Analytics
 
-![Analytics](docs/images/Analytics.jpg)
+<a href="docs/images/Analytics.jpg">
+  <img src="docs/images/Analytics.jpg" alt="Analytics" width="250">
+</a>
 
 ### Audit Logs
 
-![Audit Logs](docs/images/Audit_Logs.jpg)
+<a href="docs/images/Audit_Logs.jpg">
+  <img src="docs/images/Audit_Logs.jpg" alt="Audit Logs" width="250">
+</a>
 
 ---
 
