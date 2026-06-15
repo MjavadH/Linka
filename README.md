@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/Logo.png" alt="Linka"></p>
+
 # Linka
 
 > Open-source Telegram file delivery platform powered by deep links, premium access, sponsor verification, and archive-based storage.
