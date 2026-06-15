@@ -9,9 +9,7 @@ class AdminSection(StrEnum):
     SPONSORS = "sponsors"
     PREMIUM = "premium"
     BROADCAST = "broadcast"
-    STATISTICS = "statistics"
     ANALYTICS = "analytics"
-    SETTINGS = "settings"
     USERS = "users"
     SYSTEM = "system"
 

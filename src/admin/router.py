@@ -8,11 +8,9 @@ from admin.handlers import (
     files,
     premium,
     sponsors,
-    statistics,
     system,
     users,
 )
-from admin.handlers import settings as settings_handlers
 from core.config import Settings
 
 
@@ -30,8 +28,6 @@ def create_admin_router(settings: Settings) -> Router:
         premium.router,
         broadcast.router,
         analytics.router,
-        statistics.router,
-        settings_handlers.router,
         system.router,
     )
     return router
