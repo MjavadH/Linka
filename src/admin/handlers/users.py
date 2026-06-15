@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 from html import escape
 from typing import Any
@@ -107,7 +108,7 @@ async def grant_plan(callback: CallbackQuery, callback_data: AdminUserCallback, 
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Grant Premium", target_type="User", target_id=target.telegram_id, details=f"{plan.name} ({plan.duration_days} Days)")
     await _safe_notify(callback, target.telegram_id, "✅ Your premium subscription has been activated.")
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=user_detail_keyboard(target.id))
+        await callback.message.edit_text(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=await _user_details_keyboard(session, target.id))
     await callback.answer()
 
 
@@ -141,7 +142,7 @@ async def receive_custom_premium(message: Message, state: FSMContext, session: A
             await message.bot.send_message(target.telegram_id, "✅ Your premium subscription has been activated.")
         except TelegramAPIError:
             pass
-    await message.answer(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=user_detail_keyboard(target.id))
+    await message.answer(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=await _user_details_keyboard(session ,target.id))
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.REMOVE_PREMIUM))
@@ -207,7 +208,7 @@ async def receive_temporary_ban(message: Message, state: FSMContext, session: As
             await message.bot.send_message(target.telegram_id, f"🚫 You have been temporarily banned.\n\nBan Duration:\n{days} days\n\nIf you believe this is a mistake,\nplease contact support.")
         except TelegramAPIError:
             pass
-    await message.answer("✅ User temporarily banned.", reply_markup=user_detail_keyboard(target.id))
+    await message.answer("✅ User temporarily banned.", reply_markup=await _user_details_keyboard(session ,target.id))
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.UNBAN))
@@ -243,11 +244,22 @@ async def receive_message(message: Message, state: FSMContext, session: AsyncSes
         await state.clear()
         return
     delivered = await UserMessagingService(message.bot).send_direct_message(target.telegram_id, message.text or "")
-    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Admin Message", target_type="User", target_id=target.telegram_id, details=("Message sent successfully" if delivered else "Message delivery failed") + f"; Target Username: @{target.username or '-'}; Delivery Status: {'success' if delivered else 'failed'}; Message Sent Time: {datetime.now(UTC):%Y-%m-%d %H:%M:%S}")
+    await AuditLogService(AuditLogRepository(session)).record(admin=message.from_user, action="Admin Message", target_type="User", target_id=target.telegram_id, details=f"<b>Delivery Status:</b> {'success' if delivered else 'failed'}\n<b>Target Username:</b> @{target.username or '-'}\n<b>Message Text:</b><blockquote>{html.escape(message.text) if delivered else ''}</blockquote>")
     if delivered:
-        await message.answer("✅ Message delivered.", reply_markup=user_detail_keyboard(target.id))
+        await message.answer("✅ Message delivered.")
     else:
-        await message.answer("❌ Message delivery failed.", reply_markup=user_detail_keyboard(target.id))
+        await message.answer("❌ Message delivery failed.")
+
+    details = await build_user_management_service(session).get_details(target.id)
+
+    if details is not None:
+        await message.answer(
+            _details_text(details),
+            reply_markup=await _user_details_keyboard(
+                session,
+                details.user.id,
+            ),
+        )
     await state.clear()
 
 
@@ -257,12 +269,38 @@ async def show_user_management(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def _user_details_keyboard(
+    session: AsyncSession,
+    user_id: int,
+):
+    details = await build_user_management_service(session).get_details(user_id)
+
+    if details is None:
+        return user_detail_keyboard(
+            user_id,
+            is_banned=False,
+            has_premium=False,
+        )
+
+    return user_detail_keyboard(
+        user_id,
+        is_banned=details.active_ban is not None,
+        has_premium=details.active_subscription is not None,
+    )
+
+
 async def _send_user_details(message: Message, session: AsyncSession, user_id: int) -> None:
     details = await build_user_management_service(session).get_details(user_id)
     if details is None:
         await message.answer("❌ User not found.", reply_markup=user_management_keyboard())
         return
-    await message.answer(_details_text(details), reply_markup=user_detail_keyboard(details.user.id))
+    await message.answer(
+        _details_text(details),
+        reply_markup=await _user_details_keyboard(
+            session,
+            details.user.id,
+        ),
+    )
 
 
 async def _edit_user_details(callback: CallbackQuery, session: AsyncSession, user_id: int, notice: str | None = None) -> None:
@@ -274,7 +312,13 @@ async def _edit_user_details(callback: CallbackQuery, session: AsyncSession, use
     if notice:
         text = f"{notice}\n\n{text}"
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, reply_markup=user_detail_keyboard(details.user.id))
+        await callback.message.edit_text(
+            text,
+            reply_markup=await _user_details_keyboard(
+                session,
+                details.user.id,
+            ),
+        )
     await callback.answer()
 
 
