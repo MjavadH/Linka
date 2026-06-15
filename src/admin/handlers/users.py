@@ -22,6 +22,7 @@ from admin.keyboards.users import (
     user_detail_keyboard,
     user_management_keyboard,
     user_search_results_keyboard,
+    cancel_action_keyboard,
 )
 from admin.states.users import AdminUserStates
 from models.enums import SponsorStatus
@@ -179,7 +180,10 @@ async def temporary_ban(callback: CallbackQuery, callback_data: AdminUserCallbac
     await state.update_data(user_id=callback_data.user_id)
     await state.set_state(AdminUserStates.waiting_for_temporary_ban_days)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("Enter duration in days.\n\nExample:\n5")
+        await callback.message.edit_text(
+            "Enter duration in days.\n\nExample:\n5",
+            reply_markup=cancel_action_keyboard(callback_data.user_id)
+        )
     await callback.answer()
 
 
@@ -223,7 +227,10 @@ async def message_user(callback: CallbackQuery, callback_data: AdminUserCallback
     await state.update_data(user_id=callback_data.user_id)
     await state.set_state(AdminUserStates.waiting_for_message)
     if isinstance(callback.message, Message):
-        await callback.message.edit_text("📨 Send the message content for this user.")
+        await callback.message.edit_text(
+            "📨 Send the message content for this user.",
+            reply_markup=cancel_action_keyboard(callback_data.user_id)
+        )
     await callback.answer()
 
 

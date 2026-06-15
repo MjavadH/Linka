@@ -55,7 +55,7 @@ def premium_plan_keyboard(user_id: int, plans: list[PremiumPlan]) -> InlineKeybo
         for plan in plans
     ]
     rows.append([InlineKeyboardButton(text="⚙️ Custom Duration", callback_data=AdminUserCallback(action=AdminUserAction.CUSTOM_PREMIUM, user_id=user_id).pack())])
-    rows.append(navigation_row(back_to=AdminSection.USERS))
+    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data=AdminUserCallback(action=AdminUserAction.VIEW, user_id=user_id).pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -64,10 +64,16 @@ def ban_type_keyboard(user_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="⛔ Permanent Ban", callback_data=AdminUserCallback(action=AdminUserAction.BAN_PERMANENT, user_id=user_id).pack())],
             [InlineKeyboardButton(text="⏳ Temporary Ban", callback_data=AdminUserCallback(action=AdminUserAction.BAN_TEMPORARY, user_id=user_id).pack())],
-            navigation_row(back_to=AdminSection.USERS),
+            [InlineKeyboardButton(text="⬅️ Back", callback_data=AdminUserCallback(action=AdminUserAction.VIEW, user_id=user_id).pack())],
         ]
     )
 
+def cancel_action_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Cancel", callback_data=AdminUserCallback(action=AdminUserAction.VIEW, user_id=user_id).pack())]
+        ]
+    )
 
 def _user_label(user: User) -> str:
     name = user.first_name or "User"
