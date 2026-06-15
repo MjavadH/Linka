@@ -19,10 +19,6 @@ def format_money(value: Decimal) -> str:
     return f"{value:,.2f}"
 
 
-def plan_icon(name: str) -> str:
-    return {"silver": "🥈", "gold": "🥇", "diamond": "💎", "platinum": "👑"}.get(name.lower(), "⭐")
-
-
 async def show_plan_selection(message: Message, session: AsyncSession) -> None:
     plans = await PremiumPlanRepository(session).list_active()
     if not plans:
@@ -30,7 +26,7 @@ async def show_plan_selection(message: Message, session: AsyncSession) -> None:
         return
     lines = ["⭐ <b>Available Plans</b>", ""]
     for plan in plans:
-        lines.extend([f"{plan_icon(plan.name)} <b>{plan.name}</b>", f"{plan.duration_days} Days", format_money(plan.price), ""])
+        lines.extend([f"<b>{plan.name}</b>", f"{plan.duration_days} Days", format_money(plan.price), ""])
         if plan.description:
             lines.extend([plan.description, ""])
     await message.answer("\n".join(lines).strip(), reply_markup=plan_selection_keyboard(plans))
@@ -56,7 +52,7 @@ async def select_plan(callback: CallbackQuery, session: AsyncSession) -> None:
         await callback.answer("Plan is not available", show_alert=True)
         return
     text = (
-        f"{plan_icon(plan.name)} <b>{plan.name}</b>\n\n"
+        f"<b>{plan.name}</b>\n\n"
         f"Duration:\n{plan.duration_days} Days\n\n"
         f"Price:\n{format_money(plan.price)}\n\n"
         "Choose payment method."
