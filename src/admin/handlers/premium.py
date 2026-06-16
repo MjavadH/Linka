@@ -16,6 +16,7 @@ from admin.callbacks import (
 from admin.keyboards.navigation import navigation_row
 from admin.states.premium import AdminPremiumStates
 from core.config import Settings
+from core.timezone import format_date
 from handlers.premium import format_money
 from repositories.premium import PremiumPlanRepository
 from repositories.audit_logs import AuditLogRepository
@@ -212,7 +213,7 @@ async def receive_grant_user(message: Message, state: FSMContext, session: Async
 
 
 @router.callback_query(AdminPremiumCallback.filter(F.action == AdminPremiumAction.GRANT_PLAN))
-async def activate_grant(callback: CallbackQuery, callback_data: AdminPremiumCallback, state: FSMContext, session: AsyncSession) -> None:
+async def activate_grant(callback: CallbackQuery, callback_data: AdminPremiumCallback, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     data = await state.get_data()
     if "user_id" not in data:
         await callback.answer("Grant workflow expired", show_alert=True)
@@ -228,7 +229,7 @@ async def activate_grant(callback: CallbackQuery, callback_data: AdminPremiumCal
     if callback.bot is not None:
         await callback.bot.send_message(int(data["telegram_id"]), "✅ Premium subscription activated.")
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"✅ Activated {plan.name} until {subscription.expires_at:%Y-%m-%d}.")
+        await callback.message.edit_text(f"✅ Activated {plan.name} until {format_date(subscription.expires_at, settings.timezone)}.")
     await callback.answer()
 
 

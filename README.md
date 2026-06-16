@@ -237,9 +237,24 @@ FILE_DELETE_AFTER_SECONDS=
 SPONSOR_VERIFICATION_INTERVAL_SECONDS=
 
 BROADCAST_RATE_LIMIT_PER_SECOND=
+
+TIMEZONE=
+
 ```
 
 See `.env.example` for the full list.
+
+### Timezone support
+
+Linka stores all database timestamps in UTC. Do not migrate or alter timestamp columns such as `created_at`, `updated_at`, and `expires_at`; they remain canonical UTC values for calculations and background jobs.
+
+Set `TIMEZONE` to control how timestamps are displayed in admin UI screens, logs, reports, health status output, subscription expirations, ban expirations, sponsor expirations, and analytics reports. For example:
+
+```env
+TIMEZONE=Asia/Tehran
+```
+
+Valid values are IANA timezone names supported by Python `zoneinfo`, such as `UTC`, `Europe/Amsterdam`, `America/New_York`, `Asia/Tokyo`, and `Asia/Dubai`. Invalid values fail startup with a clear error.
 
 ---
 

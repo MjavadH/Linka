@@ -1,5 +1,5 @@
 import html
-from datetime import UTC, datetime
+from datetime import datetime
 from html import escape
 from typing import Any
 
@@ -26,6 +26,8 @@ from admin.keyboards.users import (
     cancel_action_keyboard,
 )
 from admin.states.users import AdminUserStates
+from core.config import Settings
+from core.timezone import format_datetime
 from models.enums import SponsorStatus
 from models.user import User
 from models.user_ban import UserBan
@@ -80,8 +82,8 @@ async def receive_search(message: Message, state: FSMContext, session: AsyncSess
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.VIEW))
-async def view_user(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
-    await _edit_user_details(callback, session, callback_data.user_id)
+async def view_user(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession, settings: Settings,) -> None:
+    await _edit_user_details(callback, session, callback_data.user_id, settings=settings)
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.GRANT_PREMIUM))
@@ -96,7 +98,7 @@ async def grant_premium(callback: CallbackQuery, callback_data: AdminUserCallbac
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.GRANT_PLAN))
-async def grant_plan(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
+async def grant_plan(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession, settings: Settings) -> None:
     plan = await PremiumPlanRepository(session).get(callback_data.plan_id)
     user = await UserRepository(session).get_by_telegram_id(callback.from_user.id)
     target = await UserRepository(session).get_details(callback_data.user_id)
@@ -108,7 +110,7 @@ async def grant_plan(callback: CallbackQuery, callback_data: AdminUserCallback, 
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Grant Premium", target_type="User", target_id=target.telegram_id, details=f"{plan.name} ({plan.duration_days} Days)")
     await _safe_notify(callback, target.telegram_id, "✅ Your premium subscription has been activated.")
     if isinstance(callback.message, Message):
-        await callback.message.edit_text(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=await _user_details_keyboard(session, target.id))
+        await callback.message.edit_text(f"✅ Premium activated until {_fmt(subscription.expires_at, settings.timezone)}.", reply_markup=await _user_details_keyboard(session, target.id))
     await callback.answer()
 
 
@@ -122,7 +124,7 @@ async def custom_premium(callback: CallbackQuery, callback_data: AdminUserCallba
 
 
 @router.message(AdminUserStates.waiting_for_custom_premium_days, F.text)
-async def receive_custom_premium(message: Message, state: FSMContext, session: AsyncSession) -> None:
+async def receive_custom_premium(message: Message, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     days = _positive_int(message.text or "")
     if days is None:
         await message.answer("Duration must be a positive number of days.")
@@ -142,11 +144,11 @@ async def receive_custom_premium(message: Message, state: FSMContext, session: A
             await message.bot.send_message(target.telegram_id, "✅ Your premium subscription has been activated.")
         except TelegramAPIError:
             pass
-    await message.answer(f"✅ Premium activated until {_fmt(subscription.expires_at)}.", reply_markup=await _user_details_keyboard(session ,target.id))
+    await message.answer(f"✅ Premium activated until {_fmt(subscription.expires_at, settings.timezone)}.", reply_markup=await _user_details_keyboard(session ,target.id))
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.REMOVE_PREMIUM))
-async def remove_premium(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
+async def remove_premium(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession, settings: Settings) -> None:
     target = await UserRepository(session).get_details(callback_data.user_id)
     if target is None:
         await callback.answer("User not found", show_alert=True)
@@ -154,7 +156,7 @@ async def remove_premium(callback: CallbackQuery, callback_data: AdminUserCallba
     await build_user_management_service(session).remove_premium(target.id)
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Remove Premium", target_type="User", target_id=target.telegram_id, details="Removed active subscription")
     await _safe_notify(callback, target.telegram_id, "⚠️ Your premium subscription has been removed by administration.")
-    await _edit_user_details(callback, session, target.id, notice="✅ Premium removed.")
+    await _edit_user_details(callback, session, target.id, notice="✅ Premium removed.", settings=settings)
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.BAN))
@@ -165,7 +167,7 @@ async def choose_ban(callback: CallbackQuery, callback_data: AdminUserCallback) 
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.BAN_PERMANENT))
-async def permanent_ban(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
+async def permanent_ban(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession, settings: Settings) -> None:
     target = await UserRepository(session).get_details(callback_data.user_id)
     if target is None:
         await callback.answer("User not found", show_alert=True)
@@ -173,7 +175,7 @@ async def permanent_ban(callback: CallbackQuery, callback_data: AdminUserCallbac
     await build_user_management_service(session).ban_permanent(target.id)
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Ban User", target_type="User", target_id=target.telegram_id, details="Permanent ban")
     await _safe_notify(callback, target.telegram_id, "🚫 You have been banned by the administration.\n\nIf you believe this is a mistake,\nplease contact support.")
-    await _edit_user_details(callback, session, target.id, notice="✅ User banned permanently.")
+    await _edit_user_details(callback, session, target.id, notice="✅ User banned permanently.", settings=settings)
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.BAN_TEMPORARY))
@@ -212,7 +214,7 @@ async def receive_temporary_ban(message: Message, state: FSMContext, session: As
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.UNBAN))
-async def unban(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
+async def unban(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession, settings: Settings) -> None:
     target = await UserRepository(session).get_details(callback_data.user_id)
     if target is None:
         await callback.answer("User not found", show_alert=True)
@@ -220,7 +222,7 @@ async def unban(callback: CallbackQuery, callback_data: AdminUserCallback, sessi
     await build_user_management_service(session).unban(target.id)
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Unban User", target_type="User", target_id=target.telegram_id, details="Access restored")
     await _safe_notify(callback, target.telegram_id, "✅ Your access to the bot has been restored.")
-    await _edit_user_details(callback, session, target.id, notice="✅ User unbanned.")
+    await _edit_user_details(callback, session, target.id, notice="✅ User unbanned.", settings=settings)
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.MESSAGE))
@@ -303,12 +305,12 @@ async def _send_user_details(message: Message, session: AsyncSession, user_id: i
     )
 
 
-async def _edit_user_details(callback: CallbackQuery, session: AsyncSession, user_id: int, notice: str | None = None) -> None:
+async def _edit_user_details(callback: CallbackQuery, session: AsyncSession, user_id: int, settings: Settings, notice: str | None = None) -> None:
     details = await build_user_management_service(session).get_details(user_id)
     if details is None:
         await callback.answer("User not found", show_alert=True)
         return
-    text = _details_text(details)
+    text = _details_text(details, settings.timezone)
     if notice:
         text = f"{notice}\n\n{text}"
     if isinstance(callback.message, Message):
@@ -322,7 +324,7 @@ async def _edit_user_details(callback: CallbackQuery, session: AsyncSession, use
     await callback.answer()
 
 
-def _details_text(details: ManagedUserDetails) -> str:
+def _details_text(details: ManagedUserDetails, timezone: str = "UTC") -> str:
     user = details.user
     subscription = details.active_subscription
     ban = details.active_ban
@@ -332,30 +334,30 @@ def _details_text(details: ManagedUserDetails) -> str:
         f"Username:\n{('@' + escape(user.username)) if user.username else '—'}\n\n"
         f"Telegram ID:\n<code>{user.telegram_id}</code>\n\n"
         f"Internal User ID:\n<code>{user.id}</code>\n\n"
-        f"Joined:\n{_fmt(user.joined_at)}\n\n"
-        f"Last Seen:\n{_fmt(user.last_seen_at)}\n\n"
-        f"Premium Status:\n{_premium_status(subscription)}\n\n"
-        f"Ban Status:\n{_ban_status(ban)}\n\n"
+        f"Joined:\n{_fmt(user.joined_at, timezone)}\n\n"
+        f"Last Seen:\n{_fmt(user.last_seen_at, timezone)}\n\n"
+        f"Premium Status:\n{_premium_status(subscription, timezone)}\n\n"
+        f"Ban Status:\n{_ban_status(ban, timezone)}\n\n"
         f"Sponsor Status:\n{_sponsor_status(user)}\n\n"
         f"Total Downloads:\n{user.total_downloads}\n\n"
-        f"Sponsor Verified At:\n{_fmt(user.sponsor_verified_at)}\n\n"
-        f"Last Sponsor Check:\n{_fmt(user.last_sponsor_check_at)}"
+        f"Sponsor Verified At:\n{_fmt(user.sponsor_verified_at, timezone)}\n\n"
+        f"Last Sponsor Check:\n{_fmt(user.last_sponsor_check_at, timezone)}"
     )
 
 
-def _premium_status(subscription: Any | None) -> str:
+def _premium_status(subscription: Any | None, timezone: str = "UTC") -> str:
     if subscription is None:
         return "Inactive"
     plan_name = subscription.plan.name if getattr(subscription, "plan", None) is not None else "Custom"
-    return f"Active\nPlan: {escape(plan_name)}\nExpires: {_fmt(subscription.expires_at)}"
+    return f"Active\nPlan: {escape(plan_name)}\nExpires: {_fmt(subscription.expires_at, timezone)}"
 
 
-def _ban_status(ban: UserBan | None) -> str:
+def _ban_status(ban: UserBan | None, timezone: str = "UTC") -> str:
     if ban is None:
         return "Not Banned"
     if ban.is_permanent:
         return f"Banned\nType: Permanent\nReason: {escape(ban.reason)}"
-    return f"Banned\nType: Temporary\nUntil: {_fmt(ban.banned_until)}\nReason: {escape(ban.reason)}"
+    return f"Banned\nType: Temporary\nUntil: {_fmt(ban.banned_until, timezone)}\nReason: {escape(ban.reason)}"
 
 
 def _sponsor_status(user: User) -> str:
@@ -363,12 +365,8 @@ def _sponsor_status(user: User) -> str:
     return escape(label)
 
 
-def _fmt(value: datetime | None) -> str:
-    if value is None:
-        return "—"
-    if value.tzinfo is not None:
-        value = value.astimezone(UTC)
-    return value.strftime("%Y-%m-%d %H:%M")
+def _fmt(value: datetime | None, timezone: str = "UTC") -> str:
+    return format_datetime(value, timezone)
 
 
 def _positive_int(value: str) -> int | None:

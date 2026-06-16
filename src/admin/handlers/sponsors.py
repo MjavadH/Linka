@@ -22,6 +22,8 @@ from admin.states.sponsors import AdminSponsorStates
 from repositories.sponsors import SponsorRepository
 from repositories.audit_logs import AuditLogRepository
 from services.audit_logs import AuditLogService
+from core.config import Settings
+from core.timezone import format_datetime
 
 router = Router(name="admin_sponsors")
 INVITE_LINK_RE = re.compile(r"^https://(?:t\.me|telegram\.me)/(?:\+[A-Za-z0-9_-]+|joinchat/[A-Za-z0-9_-]+|[A-Za-z0-9_]{5,})(?:/)?$")
@@ -101,10 +103,8 @@ async def receive_sponsor_invite_url(message: Message, state: FSMContext) -> Non
 
 
 @router.callback_query(AdminSponsorCallback.filter(F.action == AdminSponsorAction.VIEW))
-async def view_sponsor(
-    callback: CallbackQuery, callback_data: AdminSponsorCallback, session: AsyncSession
-) -> None:
-    await show_sponsor_details(callback, session, callback_data.sponsor_id)
+async def view_sponsor(callback: CallbackQuery, callback_data: AdminSponsorCallback, session: AsyncSession, settings: Settings) -> None:
+    await show_sponsor_details(callback, session, callback_data.sponsor_id, settings)
 
 
 @router.callback_query(AdminSponsorCallback.filter(F.action == AdminSponsorAction.EDIT))
@@ -282,11 +282,7 @@ async def receive_join_count(message: Message, state: FSMContext, session: Async
 
 
 @router.callback_query(AdminSponsorCallback.filter(F.action.in_({AdminSponsorAction.ACTIVATE, AdminSponsorAction.DEACTIVATE})))
-async def toggle_sponsor(
-    callback: CallbackQuery,
-    callback_data: AdminSponsorCallback,
-    session: AsyncSession,
-) -> None:
+async def toggle_sponsor(callback: CallbackQuery,callback_data: AdminSponsorCallback,session: AsyncSession, settings: Settings,) -> None:
     repository = SponsorRepository(session)
     sponsor = await repository.get(callback_data.sponsor_id)
     if sponsor is None:
@@ -295,7 +291,7 @@ async def toggle_sponsor(
     sponsor.is_active = callback_data.action == AdminSponsorAction.ACTIVATE
     await session.flush()
     await AuditLogService(AuditLogRepository(session)).record(admin=callback.from_user, action="Edit Sponsor", target_type="Sponsor", target_id=sponsor.id, details=f"{sponsor.title} {'activated' if sponsor.is_active else 'deactivated'}")
-    await show_sponsor_details(callback, session, sponsor.id)
+    await show_sponsor_details(callback, session, sponsor.id, settings)
 
 
 @router.callback_query(AdminSponsorCallback.filter(F.action == AdminSponsorAction.DELETE))
@@ -349,7 +345,7 @@ async def show_sponsors(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer()
 
 
-async def show_sponsor_details(callback: CallbackQuery, session: AsyncSession, sponsor_id: int) -> None:
+async def show_sponsor_details(callback: CallbackQuery, session: AsyncSession, sponsor_id: int, settings: Settings) -> None:
     sponsor = await SponsorRepository(session).get(sponsor_id)
     if sponsor is None:
         await callback.answer("Sponsor not found", show_alert=True)
@@ -357,7 +353,10 @@ async def show_sponsor_details(callback: CallbackQuery, session: AsyncSession, s
     status = "Active" if sponsor.is_active else "Inactive"
     expiration_value = sponsor.expiration_value or "—"
     if sponsor.expiration_type == "date" and sponsor.expiration_value:
-        expiration_value = sponsor.expiration_value
+        expiration_value = format_datetime(
+            datetime.fromisoformat(sponsor.expiration_value),
+            settings.timezone,
+        )
     text = (
         f"📢 <b>{sponsor.title}</b>\n\n"
         f"<b>Chat ID:</b> <code>{sponsor.chat_id}</code>\n"
@@ -367,7 +366,7 @@ async def show_sponsor_details(callback: CallbackQuery, session: AsyncSession, s
         f"<b>Expiration Type:</b> {sponsor.expiration_type}\n"
         f"<b>Expiration Value:</b> {expiration_value}\n"
         f"<b>Current Join Count:</b> {sponsor.sponsor_join_count}\n"
-        f"<b>Created At:</b> {sponsor.created_at}\n"
+        f"<b>Created At:</b> {format_datetime(sponsor.created_at, settings.timezone)}\n"
     )
     action = AdminSponsorAction.DEACTIVATE if sponsor.is_active else AdminSponsorAction.ACTIVATE
     keyboard = InlineKeyboardMarkup(

@@ -10,6 +10,7 @@ from admin.callbacks import AdminMenuCallback, AdminSection, AdminSystemAction, 
 from admin.keyboards.navigation import home_button
 from admin.states.system import AdminSystemStates
 from core.config import Settings
+from core.timezone import format_datetime
 from models.file import DeepLink
 from models.subscription import Subscription
 from repositories.audit_logs import AuditLogRepository
@@ -27,15 +28,15 @@ async def system_menu(callback: CallbackQuery) -> None:
     await open_system(callback)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_LOGS))
-async def audit_logs(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
-    await _show_logs(callback, session, page=callback_data.page)
+async def audit_logs(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings) -> None:
+    await _show_logs(callback, session, settings, page=callback_data.page)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_VIEW))
-async def audit_detail(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
+async def audit_detail(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings) -> None:
     log = await AuditLogService(AuditLogRepository(session)).get(callback_data.log_id)
     if log is None:
         await callback.answer("Audit log not found", show_alert=True); return
-    text = ("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{log.created_at:%Y-%m-%d %H:%M}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nUsername:\n@{log.admin_username or '-'}\n\n" f"Admin ID:\n{log.admin_user_id or '-'}\n\nAction:\n{log.action}\n\n" f"Target:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}")
+    text = ("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{format_datetime(log.created_at, settings.timezone)}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nUsername:\n@{log.admin_username or '-'}\n\n" f"Admin ID:\n{log.admin_user_id or '-'}\n\nAction:\n{log.action}\n\n" f"Target:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}")
     await _edit(callback, text, InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH))
@@ -49,22 +50,22 @@ async def audit_search_date(callback: CallbackQuery, state: FSMContext) -> None:
     await _edit(callback, "📅 <b>Search by Date</b>\n\nSend date in YYYY/MM/DD format.\nExample: 2026/06/13", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_SEARCH)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_date, F.text)
-async def receive_search_date(message: Message, state: FSMContext, session: AsyncSession) -> None:
+async def receive_search_date(message: Message, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     try:
         day = datetime.strptime(message.text or "", "%Y/%m/%d").replace(tzinfo=UTC)
     except ValueError:
         await message.answer("Invalid date. Use YYYY/MM/DD, for example 2026/06/13."); return
     await state.clear()
     data = await AuditLogService(AuditLogRepository(session)).list_logs(page=1, per_page=8, day=day)
-    await message.answer(_logs_text(data), reply_markup=_logs_keyboard(data, day=day))
+    await message.answer(_logs_text(data, settings.timezone), reply_markup=_logs_keyboard(data, day=day))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_DATE_RESULTS))
-async def audit_search_date_results(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
+async def audit_search_date_results(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings,) -> None:
     try:
         day = datetime.strptime(callback_data.value, "%Y/%m/%d").replace(tzinfo=UTC)
     except ValueError:
         await callback.answer("Invalid saved date", show_alert=True); return
-    await _show_logs(callback, session, page=callback_data.page, day=day)
+    await _show_logs(callback, session, settings, page=callback_data.page, day=day)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_LOG_ID))
 async def audit_search_log_id(callback: CallbackQuery, state: FSMContext) -> None:
@@ -72,14 +73,14 @@ async def audit_search_log_id(callback: CallbackQuery, state: FSMContext) -> Non
     await _edit(callback, "🆔 <b>Search by Log ID</b>\n\nSend log id.\nExample: 1452", InlineKeyboardMarkup(inline_keyboard=[[home_button(), _btn("⬅️ Back", AdminSystemAction.AUDIT_SEARCH)]]))
 
 @router.message(AdminSystemStates.waiting_for_search_log_id, F.text)
-async def receive_search_log_id(message: Message, state: FSMContext, session: AsyncSession) -> None:
+async def receive_search_log_id(message: Message, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     if not (message.text or "").strip().isdigit():
         await message.answer("Log ID must be numeric."); return
     await state.clear()
     log = await AuditLogService(AuditLogRepository(session)).get(int((message.text or "").strip()))
     if log is None:
         await message.answer("Audit log not found."); return
-    await message.answer(("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{log.created_at:%Y-%m-%d %H:%M}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nAction:\n{log.action}\n\nTarget:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
+    await message.answer(("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{format_datetime(log.created_at, settings.timezone)}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nAction:\n{log.action}\n\nTarget:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER))
 async def audit_filter(callback: CallbackQuery) -> None:
@@ -114,21 +115,21 @@ async def audit_filter_action_menu(callback: CallbackQuery) -> None:
     await _edit(callback, "⚡ <b>Filter By Action</b>", InlineKeyboardMarkup(inline_keyboard=rows))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_CLEAR_FILTER))
-async def audit_clear_filter(callback: CallbackQuery, session: AsyncSession) -> None:
-    await _show_logs(callback, session)
+async def audit_clear_filter(callback: CallbackQuery, session: AsyncSession, settings: Settings,) -> None:
+    await _show_logs(callback, session, settings)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ACTION))
-async def audit_filter_action(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
-    await _show_logs(callback, session, page=callback_data.page, action=callback_data.value)
+async def audit_filter_action(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings,) -> None:
+    await _show_logs(callback, session, settings, page=callback_data.page, action=callback_data.value)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER_ADMIN))
-async def audit_filter_admin(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
-    await _show_logs(callback, session, page=callback_data.page, admin_user_id=callback_data.admin_id)
+async def audit_filter_admin(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings,) -> None:
+    await _show_logs(callback, session, settings, page=callback_data.page, admin_user_id=callback_data.admin_id)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.HEALTH))
 async def health(callback: CallbackQuery, session: AsyncSession, settings: Settings, bot: Bot, scheduler: object | None = None) -> None:
     report = await HealthService(bot=bot, settings=settings, session=session, scheduler=scheduler).check()
-    text = ("❤️ <b>Health Status</b>\n\n" + "\n".join([f"{s.name}: {'✅' if s.healthy else '❌'} {s.detail}" for s in [report.database, report.scheduler, report.archive_channel, report.broadcast_worker, report.bot_api]]) + f"\n\nLast Health Check Time: <b>{report.checked_at:%Y-%m-%d %H:%M:%S}</b>")
+    text = ("❤️ <b>Health Status</b>\n\n" + "\n".join([f"{s.name}: {'✅' if s.healthy else '❌'} {s.detail}" for s in [report.database, report.scheduler, report.archive_channel, report.broadcast_worker, report.bot_api]]) + f"\n\nLast Health Check Time: <b>{format_datetime(report.checked_at, settings.timezone, '%Y-%m-%d %H:%M:%S')}</b>")
     await _edit(callback, text, InlineKeyboardMarkup(inline_keyboard=[[_btn("🔄 Run Health Check", AdminSystemAction.HEALTH)], [home_button()]]))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.MAINTENANCE))
@@ -148,11 +149,11 @@ async def maintenance_action(callback: CallbackQuery, session: AsyncSession, cal
     await session.commit()
     await _edit(callback, f"✅ <b>Maintenance Complete</b>\n\n{result}", InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back", AdminSystemAction.MAINTENANCE), home_button()]]))
 
-async def _show_logs(callback: CallbackQuery, session: AsyncSession, *, page: int = 1, admin_user_id: int | None = None, action: str | None = None, day: datetime | None = None) -> None:
+async def _show_logs(callback: CallbackQuery, session: AsyncSession, settings: Settings, *, page: int = 1, admin_user_id: int | None = None, action: str | None = None, day: datetime | None = None) -> None:
     data = await AuditLogService(AuditLogRepository(session)).list_logs(page=page, per_page=8, admin_user_id=admin_user_id, action=action, day=day)
-    await _edit(callback, _logs_text(data), _logs_keyboard(data, admin_user_id=admin_user_id, action=action, day=day))
+    await _edit(callback, _logs_text(data, settings.timezone), _logs_keyboard(data, admin_user_id=admin_user_id, action=action, day=day))
 
-def _logs_text(data) -> str:
+def _logs_text(data, timezone: str = "UTC") -> str:
     if not data.items:
         return "📜 <b>Latest Audit Logs</b>\n\nNo logs found."
 
@@ -163,7 +164,7 @@ def _logs_text(data) -> str:
 
         lines.append(
             f"#{log.id} - "
-            f"[{log.created_at:%Y-%m-%d %H:%M}] - "
+            f"[{format_datetime(log.created_at, timezone)}] - "
             f"{log.action} - "
             f"{admin}"
         )

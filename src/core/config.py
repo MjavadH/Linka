@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     premium_crypto_network: str = "USDT TRC20"
     premium_support_instructions: str = "Contact support for payment and subscription help."
     log_level: str = "INFO"
+    timezone: str = Field(default="UTC", validation_alias=AliasChoices("TIMEZONE", "timezone"))
 
     @field_validator("admin_telegram_ids", mode="before")
     @classmethod
@@ -47,6 +48,14 @@ class Settings(BaseSettings):
             return tuple(int(item) for item in value)
         raise TypeError("ADMIN_TELEGRAM_IDS must be a comma-separated string or sequence")
 
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone_name(cls, value: str) -> str:
+        from core.timezone import validate_timezone
+
+        validate_timezone(value)
+        return value
+    
     @property
     def bot_deep_link_base(self) -> str:
         return f"https://t.me/{self.bot_username}?start="

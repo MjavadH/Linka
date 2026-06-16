@@ -22,6 +22,7 @@ from admin.keyboards.broadcast import (
 )
 from admin.states import AdminBroadcastStates
 from core.config import Settings
+from core.timezone import format_datetime
 from models.enums import BroadcastStatus, BroadcastTargetType
 from repositories.broadcasts import BroadcastRepository
 from repositories.audit_logs import AuditLogRepository
@@ -171,7 +172,7 @@ async def stop_broadcast(callback: CallbackQuery, callback_data: AdminBroadcastC
 
 
 @router.callback_query(AdminBroadcastCallback.filter(F.action == AdminBroadcastAction.HISTORY))
-async def broadcast_history(callback: CallbackQuery, session: AsyncSession) -> None:
+async def broadcast_history(callback: CallbackQuery, session: AsyncSession, settings: Settings) -> None:
     jobs = await BroadcastRepository(session).list_recent(10)
     if not jobs:
         text = "📜 <b>Broadcast History</b>\n\nNo broadcasts yet."
@@ -179,7 +180,7 @@ async def broadcast_history(callback: CallbackQuery, session: AsyncSession) -> N
         lines = ["📜 <b>Broadcast History</b>", ""]
         for job in jobs:
             delivered = job.delivered_count or 0
-            date = job.created_at.strftime("%Y-%m-%d %H:%M") if job.created_at else "—"
+            date = format_datetime(job.created_at, settings.timezone) if job.created_at else "—"
             lines.append(f"#{job.id} • {date} • {target_label(job.target_type)} • {job.status.value} • Delivered: {delivered}")
         text = "\n".join(lines)
     if isinstance(callback.message, Message):

@@ -16,6 +16,8 @@ from admin.callbacks import (
     AdminSection,
 )
 from admin.keyboards import analytics_menu_keyboard, analytics_report_keyboard
+from core.config import Settings
+from core.timezone import format_datetime
 from repositories.analytics import AnalyticsRepository
 from services.analytics import (
     AnalyticsReportService,
@@ -96,9 +98,9 @@ async def show_sponsor_analytics(callback: CallbackQuery, callback_data: AdminAn
 
 
 @router.callback_query(AdminAnalyticsCallback.filter(F.action == AdminAnalyticsAction.BROADCASTS))
-async def show_broadcast_analytics(callback: CallbackQuery, session: AsyncSession) -> None:
+async def show_broadcast_analytics(callback: CallbackQuery, session: AsyncSession, settings: Settings) -> None:
     report = await _service(session).broadcasts()
-    await _edit(callback, _broadcasts_text(report), AdminAnalyticsAction.BROADCASTS)
+    await _edit(callback, _broadcasts_text(report, settings.timezone), AdminAnalyticsAction.BROADCASTS)
 
 
 async def show_analytics_menu(callback: CallbackQuery) -> None:
@@ -224,8 +226,8 @@ def _sponsors_text(items: tuple[Any, ...], page: int) -> str:
     return f"🤝 <b>Sponsor Analytics</b> — Page {page}\n\n{lines or '—'}"
 
 
-def _broadcasts_text(report: BroadcastStatisticsRow) -> str:
-    last = report.last_broadcast_date.strftime("%Y-%m-%d %H:%M UTC") if report.last_broadcast_date else "—"
+def _broadcasts_text(report: BroadcastStatisticsRow, timezone: str = "UTC") -> str:
+    last = format_datetime(report.last_broadcast_date, timezone) if report.last_broadcast_date else "—"
     most = f"#{report.most_successful_broadcast_id} ({report.most_successful_broadcast_delivered} delivered)" if report.most_successful_broadcast_id else "—"
     return (
         "📢 <b>Broadcast Reports</b>\n\n"

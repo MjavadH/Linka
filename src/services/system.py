@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import Settings
+from core.timezone import validate_timezone
 from repositories.settings import SettingsRepository
 
 logger = structlog.get_logger(__name__)
@@ -118,6 +119,11 @@ class HealthService:
 
 async def validate_startup(*, bot: Bot, settings: Settings, session_factory: async_sessionmaker[AsyncSession], scheduler: object) -> None:
     errors: list[str] = []
+    try:
+        validate_timezone(settings.timezone)
+        logger.info("timezone_configured", timezone=settings.timezone)
+    except ValueError as exc:
+        errors.append(str(exc))
     if not settings.admin_telegram_ids: errors.append("ADMIN_TELEGRAM_IDS is required")
     if settings.archive_chat_id is None: errors.append("ARCHIVE_CHAT_ID is required")
     report = await HealthService(bot=bot, settings=settings, session_factory=session_factory, scheduler=scheduler).check()
