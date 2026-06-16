@@ -71,6 +71,9 @@ def test_expiration_scheduler_deactivates_and_notifies(monkeypatch: Any) -> None
             def __init__(self, session: Any) -> None:
                 pass
 
+            async def list_due_reminders(self, days_before: int, current: datetime | None = None) -> list[Subscription]:
+                return []
+
             async def expire_due(self) -> list[Subscription]:
                 expired.is_active = False
                 return [expired]
@@ -79,7 +82,7 @@ def test_expiration_scheduler_deactivates_and_notifies(monkeypatch: Any) -> None
             def __init__(self) -> None:
                 self.sent: list[tuple[int, str]] = []
 
-            async def send_message(self, chat_id: int, text: str) -> None:
+            async def send_message(self, chat_id: int, text: str, reply_markup: Any = None) -> None:
                 self.sent.append((chat_id, text))
 
         class Session:
@@ -94,7 +97,9 @@ def test_expiration_scheduler_deactivates_and_notifies(monkeypatch: Any) -> None
         session = Session()
         await premium_scheduler.PremiumExpirationJob(cast(Any, bot), cast(Any, session)).run()
         assert expired.is_active is False
-        assert bot.sent == [(500, "⚠️ Your premium subscription has expired.")]
+        assert len(bot.sent) == 1
+        assert bot.sent[0][0] == 500
+        assert "❌ <b>Premium Subscription Expired</b>" in bot.sent[0][1]
         assert session.committed is True
 
     asyncio.run(scenario())
@@ -226,3 +231,152 @@ def _delivery(link: DeepLink, variant: FileVariant, premium: bool) -> FileDelive
             return SimpleNamespace(message_id=55)
 
     return FileDeliveryService(cast(Any, Bot()), cast(Any, Links()), cast(Any, Variants()), cast(Any, Sponsors()), cast(Any, Premium()), cast(Any, Temps()), cast(Any, Downloads()), cast(Any, Storage()), 60)
+
+
+def test_account_display_premium_active_uses_timezone() -> None:
+    from models.enums import SponsorStatus
+    from services.accounts import AccountInfo, format_account_info
+
+    plan = PremiumPlan(id=1, name="Diamond", duration_days=30, price=Decimal("1"), is_active=True)
+    subscription = Subscription(
+        id=1,
+        user_id=1,
+        plan=plan,
+        expires_at=datetime(2026, 12, 14, 21, 0, tzinfo=UTC),
+        is_active=True,
+    )
+    user = User(
+        id=1,
+        telegram_id=123456789,
+        username="mohammad",
+        first_name="Mohammad",
+        sponsor_status=SponsorStatus.VERIFIED,
+        joined_at=datetime(2026, 1, 2, 21, 0, tzinfo=UTC),
+    )
+    text = format_account_info(AccountInfo(user=user, subscription=subscription, timezone="Asia/Tehran"))
+    assert "👤 <b>Account Information</b>" in text
+    assert "Name: Mohammad" in text
+    assert "Username: @mohammad" in text
+    assert "User ID: 123456789" in text
+    assert "Premium: Active" in text
+    assert "Plan: Diamond" in text
+    assert "Expires: 2026-12-15" in text
+    assert "Sponsor Status: Verified" in text
+    assert "Joined: 2026-01-03" in text
+
+
+def test_account_display_premium_inactive_without_username() -> None:
+    from models.enums import SponsorStatus
+    from services.accounts import AccountInfo, format_account_info
+
+    user = User(
+        id=1,
+        telegram_id=123456789,
+        username=None,
+        first_name="Mohammad",
+        sponsor_status=SponsorStatus.PENDING,
+        joined_at=datetime(2026, 1, 3, 8, 0, tzinfo=UTC),
+    )
+    text = format_account_info(AccountInfo(user=user, subscription=None, timezone="UTC"))
+    assert "Username: —" in text
+    assert "Premium: Inactive" in text
+    assert "Plan: —" in text
+    assert "Expires: —" in text
+    assert "Sponsor Status: Verification Required" in text
+
+
+def test_premium_required_screen_text_and_button() -> None:
+    from keyboards.premium import premium_required_keyboard
+
+    required_text = (
+        "⭐ <b>Premium Required</b>\n\n"
+        "This file is available only to premium members.\n\n"
+        "<b>Premium Benefits:</b>\n\n"
+        "• Access premium-only content\n\n"
+        "• Access premium-only quality variants\n\n"
+        "• No sponsor requirements\n\n"
+        "Choose a subscription plan to continue."
+    )
+    markup = premium_required_keyboard()
+    assert "Access premium-only quality variants" in required_text
+    assert markup.inline_keyboard[0][0].text == "⭐ Buy Subscription"
+    assert markup.inline_keyboard[0][0].callback_data == "premium:plans"
+
+
+def test_premium_reminder_texts_use_expected_copy_and_timezone() -> None:
+    plan = PremiumPlan(id=1, name="Diamond", duration_days=30, price=Decimal("1"), is_active=True)
+    subscription = Subscription(plan=plan, expires_at=datetime(2026, 12, 14, 21, 0, tzinfo=UTC), is_active=True)
+    assert "will expire in 7 days" in premium_scheduler._reminder_text(subscription, 7, "Asia/Tehran")
+    assert "will expire in 3 days" in premium_scheduler._reminder_text(subscription, 3, "Asia/Tehran")
+    one_day = premium_scheduler._reminder_text(subscription, 1, "Asia/Tehran")
+    assert "will expire tomorrow" in one_day
+    assert "Current Plan:\nDiamond" in one_day
+    assert "Expiration Date:\n2026-12-15" in one_day
+    assert "Renew now to avoid interruption." in one_day
+
+
+def test_expiration_notification_text_and_keyboard() -> None:
+    from keyboards.premium import expired_subscription_keyboard
+
+    text = premium_scheduler._expiration_text()
+    markup = expired_subscription_keyboard()
+    assert "❌ <b>Premium Subscription Expired</b>" in text
+    assert "You have been returned to a standard account." in text
+    assert markup.inline_keyboard[0][0].text == "⭐ Buy Subscription"
+    assert markup.inline_keyboard[0][0].callback_data == "premium:plans"
+
+
+def test_premium_reminders_and_expiration_are_sent_once(monkeypatch: Any) -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 12, 8, 0, 0, tzinfo=UTC)
+        users = {days: User(id=days, telegram_id=1000 + days) for days in (7, 3, 1)}
+        plan = PremiumPlan(id=1, name="Diamond", duration_days=30, price=Decimal("1"), is_active=True)
+        reminders = {
+            7: [Subscription(id=7, user_id=7, user=users[7], plan=plan, expires_at=now + timedelta(days=7), is_active=True)],
+            3: [Subscription(id=3, user_id=3, user=users[3], plan=plan, expires_at=now + timedelta(days=3), is_active=True)],
+            1: [Subscription(id=1, user_id=1, user=users[1], plan=plan, expires_at=now + timedelta(days=1), is_active=True)],
+        }
+        expired_user = User(id=9, telegram_id=1009)
+        expired = Subscription(id=9, user_id=9, user=expired_user, plan=plan, expires_at=now - timedelta(seconds=1), is_active=True)
+
+        class Repo:
+            def __init__(self, session: Any) -> None:
+                pass
+
+            async def list_due_reminders(self, days_before: int, current: datetime | None = None) -> list[Subscription]:
+                return [item for item in reminders[days_before] if getattr(item, f"reminder_{days_before}d_sent_at") is None]
+
+            async def mark_reminder_sent(self, subscription: Subscription, days_before: int, current: datetime | None = None) -> Subscription:
+                setattr(subscription, f"reminder_{days_before}d_sent_at", current or now)
+                return subscription
+
+            async def expire_due(self) -> list[Subscription]:
+                if expired.expiration_notified_at is not None:
+                    return []
+                expired.is_active = False
+                expired.expiration_notified_at = now
+                return [expired]
+
+        class Bot:
+            def __init__(self) -> None:
+                self.sent: list[tuple[int, str, Any]] = []
+
+            async def send_message(self, chat_id: int, text: str, reply_markup: Any = None) -> None:
+                self.sent.append((chat_id, text, reply_markup))
+
+        class Session:
+            async def commit(self) -> None:
+                pass
+
+        monkeypatch.setattr(premium_scheduler, "SubscriptionRepository", Repo)
+        bot = Bot()
+        job = premium_scheduler.PremiumExpirationJob(cast(Any, bot), cast(Any, Session()))
+        await job.run()
+        await job.run()
+        assert len(bot.sent) == 4
+        assert any("will expire in 7 days" in item[1] for item in bot.sent)
+        assert any("will expire in 3 days" in item[1] for item in bot.sent)
+        assert any("will expire tomorrow" in item[1] for item in bot.sent)
+        assert any("Premium Subscription Expired" in item[1] for item in bot.sent)
+
+    asyncio.run(scenario())

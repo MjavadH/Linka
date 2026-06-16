@@ -116,16 +116,50 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         await self.session.flush()
         return subscription
 
+    async def list_due_reminders(self, days_before: int, now: datetime | None = None) -> list[Subscription]:
+        moment = now or datetime.now(UTC)
+        threshold = moment + timedelta(days=days_before)
+        sent_column = {
+            7: Subscription.reminder_7d_sent_at,
+            3: Subscription.reminder_3d_sent_at,
+            1: Subscription.reminder_1d_sent_at,
+        }[days_before]
+        result = await self.session.execute(
+            select(Subscription)
+            .options(selectinload(Subscription.user), selectinload(Subscription.plan))
+            .where(
+                Subscription.is_active.is_(True),
+                Subscription.expires_at > moment,
+                Subscription.expires_at <= threshold,
+                sent_column.is_(None),
+            )
+        )
+        return list(result.scalars())
+
+    async def mark_reminder_sent(self, subscription: Subscription, days_before: int, now: datetime | None = None) -> Subscription:
+        moment = now or datetime.now(UTC)
+        if days_before == 7:
+            subscription.reminder_7d_sent_at = moment
+        elif days_before == 3:
+            subscription.reminder_3d_sent_at = moment
+        elif days_before == 1:
+            subscription.reminder_1d_sent_at = moment
+        else:
+            raise ValueError("Unsupported premium reminder window")
+        await self.session.flush()
+        return subscription
+
     async def expire_due(self, now: datetime | None = None) -> list[Subscription]:
         moment = now or datetime.now(UTC)
         result = await self.session.execute(
             select(Subscription)
             .options(selectinload(Subscription.user), selectinload(Subscription.plan))
-            .where(Subscription.is_active.is_(True), Subscription.expires_at <= moment)
+            .where(Subscription.is_active.is_(True), Subscription.expires_at <= moment, Subscription.expiration_notified_at.is_(None))
         )
         subscriptions = list(result.scalars())
         for subscription in subscriptions:
             subscription.is_active = False
+            subscription.expiration_notified_at = moment
         await self.session.flush()
         return subscriptions
 
