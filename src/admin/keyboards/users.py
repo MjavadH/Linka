@@ -4,15 +4,46 @@ from admin.callbacks import AdminSection, AdminUserAction, AdminUserCallback
 from admin.keyboards.navigation import back_button, home_button, navigation_row
 from models.subscription import PremiumPlan
 from models.user import User
-
+from repositories.users import UserListItem, UserPage
 
 def user_management_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔍 Search User", callback_data=AdminUserCallback(action=AdminUserAction.SEARCH).pack())],
+            [
+                InlineKeyboardButton(text="🔍 Search User", callback_data=AdminUserCallback(action=AdminUserAction.SEARCH).pack()),
+                InlineKeyboardButton(text="📋 All Users", callback_data=AdminUserCallback(action=AdminUserAction.LIST_ALL).pack()),
+            ],
+            [
+                InlineKeyboardButton(text="⭐ Premium Users", callback_data=AdminUserCallback(action=AdminUserAction.LIST_PREMIUM).pack()),
+                InlineKeyboardButton(text="🚫 Banned Users", callback_data=AdminUserCallback(action=AdminUserAction.LIST_BANNED).pack()),
+            ],
             navigation_row(),
         ]
     )
+
+def user_list_keyboard(page: UserPage, action: AdminUserAction) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=_user_list_label(item),
+                callback_data=AdminUserCallback(action=AdminUserAction.VIEW, user_id=item.user.id).pack(),
+            )
+            for item in page.items[i:i + 2]
+        ]
+        for i in range(0, len(page.items), 2)
+    ]
+    start = 0 if page.total == 0 else (page.page - 1) * page.per_page + 1
+    end = min(page.total, page.page * page.per_page)
+    rows.append([InlineKeyboardButton(text=f"Showing {start}-{end} of {page.total} users", callback_data=AdminUserCallback(action=AdminUserAction.NOOP).pack())])
+    nav = []
+    if page.page > 1:
+        nav.append(InlineKeyboardButton(text="⬅️ Previous", callback_data=AdminUserCallback(action=action, page=page.page - 1).pack()))
+    nav.append(InlineKeyboardButton(text=f"Page {page.page} / {page.pages}", callback_data=AdminUserCallback(action=AdminUserAction.NOOP).pack()))
+    if page.page < page.pages:
+        nav.append(InlineKeyboardButton(text="➡️ Next", callback_data=AdminUserCallback(action=action, page=page.page + 1).pack()))
+    rows.append(nav)
+    rows.append(navigation_row(back_to=AdminSection.USERS))
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def user_search_results_keyboard(users: list[User]) -> InlineKeyboardMarkup:
@@ -131,3 +162,11 @@ def _user_label(user: User) -> str:
     name = user.first_name or "User"
     username = f"@{user.username}" if user.username else "no username"
     return f"{name} ({username}) · {user.telegram_id}"
+
+
+def _user_list_label(item: UserListItem) -> str:
+    user = item.user
+    prefix = ("🚫" if item.is_banned else "") + ("⭐" if item.has_premium else "")
+    name = user.first_name or "User"
+    display = f"{name} (@{user.username})" if user.username else name
+    return f"{prefix} {display}" if prefix else display

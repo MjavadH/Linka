@@ -1,11 +1,32 @@
 from datetime import UTC, datetime
+from math import ceil
+from typing import NamedTuple
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from models.enums import SponsorStatus
+from models.subscription import Subscription
 from models.user import User
+from models.user_ban import UserBan
 from repositories.base import BaseRepository
+
+
+class UserListItem(NamedTuple):
+    user: User
+    has_premium: bool
+    is_banned: bool
+
+
+class UserPage(NamedTuple):
+    items: list[UserListItem]
+    total: int
+    page: int
+    per_page: int
+
+    @property
+    def pages(self) -> int:
+        return max(1, ceil(self.total / self.per_page))
 
 
 class UserRepository(BaseRepository[User]):
@@ -36,6 +57,7 @@ class UserRepository(BaseRepository[User]):
         if normalized.isdigit():
             clauses.append(User.telegram_id == int(normalized))
         clauses.append(User.username.ilike(normalized))
+        clauses.append(User.first_name.ilike(f"%{normalized}%"))
         result = await self.session.execute(
             select(User)
             .where(or_(*clauses))
@@ -43,6 +65,43 @@ class UserRepository(BaseRepository[User]):
             .limit(limit)
         )
         return list(result.scalars())
+
+    async def list_page(self, *, page: int = 1, per_page: int = 8, premium_only: bool = False, banned_only: bool = False) -> UserPage:
+        page = max(1, page)
+        now = datetime.now(UTC)
+        premium_exists = (
+            select(Subscription.id)
+            .where(
+                Subscription.user_id == User.id,
+                Subscription.is_active.is_(True),
+                Subscription.expires_at > now,
+            )
+            .exists()
+        )
+        active_ban_exists = (
+            select(UserBan.id)
+            .where(
+                UserBan.user_id == User.id,
+                UserBan.is_active.is_(True),
+                or_(UserBan.is_permanent.is_(True), UserBan.banned_until > now),
+            )
+            .exists()
+        )
+        filters = []
+        if premium_only:
+            filters.append(premium_exists)
+        if banned_only:
+            filters.append(active_ban_exists)
+        query = select(User, premium_exists.label("has_premium"), active_ban_exists.label("is_banned")).where(*filters)
+        total_query = select(func.count()).select_from(select(User.id).where(*filters).subquery())
+        total = int(await self.session.scalar(total_query) or 0)
+        result = await self.session.execute(
+            query.order_by(User.last_seen_at.desc(), User.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        items = [UserListItem(user=row[0], has_premium=bool(row[1]), is_banned=bool(row[2])) for row in result.all()]
+        return UserPage(items, total, page, per_page)
 
     async def get_details(self, user_id: int) -> User | None:
         result = await self.session.execute(

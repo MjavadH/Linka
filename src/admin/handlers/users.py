@@ -6,7 +6,7 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.callbacks import (
@@ -21,6 +21,7 @@ from admin.keyboards.users import (
     ban_type_keyboard,
     premium_plan_keyboard,
     user_detail_keyboard,
+    user_list_keyboard,
     user_management_keyboard,
     user_search_results_keyboard,
     cancel_action_keyboard,
@@ -55,6 +56,16 @@ async def open_users(callback: CallbackQuery, state: FSMContext) -> None:
 async def navigate_users(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await show_user_management(callback)
+
+
+@router.callback_query(AdminUserCallback.filter(F.action.in_({AdminUserAction.LIST_ALL, AdminUserAction.LIST_PREMIUM, AdminUserAction.LIST_BANNED})))
+async def list_users(callback: CallbackQuery, callback_data: AdminUserCallback, session: AsyncSession) -> None:
+    await _show_user_list(callback, session, callback_data.action, callback_data.page)
+
+
+@router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.NOOP))
+async def user_noop(callback: CallbackQuery) -> None:
+    await callback.answer()
 
 
 @router.callback_query(AdminUserCallback.filter(F.action == AdminUserAction.SEARCH))
@@ -265,6 +276,26 @@ async def receive_message(message: Message, state: FSMContext, session: AsyncSes
     await state.clear()
 
 
+async def _show_user_list(callback: CallbackQuery, session: AsyncSession, action: AdminUserAction, page: int = 1) -> None:
+    premium_only = action == AdminUserAction.LIST_PREMIUM
+    banned_only = action == AdminUserAction.LIST_BANNED
+    data = await build_user_management_service(session).list_users(
+        page=page,
+        per_page=8,
+        premium_only=premium_only,
+        banned_only=banned_only,
+    )
+    titles = {
+        AdminUserAction.LIST_ALL: "📋 <b>All Users</b>",
+        AdminUserAction.LIST_PREMIUM: "⭐ <b>Premium Users</b>",
+        AdminUserAction.LIST_BANNED: "🚫 <b>Banned Users</b>",
+    }
+    text = f"{titles[action]}\n\nSelect a user to view details."
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(text, reply_markup=user_list_keyboard(data, action))
+    await callback.answer()
+
+
 async def show_user_management(callback: CallbackQuery) -> None:
     if isinstance(callback.message, Message):
         await callback.message.edit_text("👥 <b>User Management</b>", reply_markup=user_management_keyboard())
@@ -274,7 +305,7 @@ async def show_user_management(callback: CallbackQuery) -> None:
 async def _user_details_keyboard(
     session: AsyncSession,
     user_id: int,
-):
+) -> InlineKeyboardMarkup:
     details = await build_user_management_service(session).get_details(user_id)
 
     if details is None:

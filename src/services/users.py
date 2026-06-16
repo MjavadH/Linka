@@ -9,7 +9,7 @@ from models.user_ban import UserBan
 from repositories.premium import PremiumPlanRepository
 from repositories.subscriptions import SubscriptionRepository
 from repositories.user_bans import UserBanRepository
-from repositories.users import UserRepository
+from repositories.users import UserPage, UserRepository
 from services.premium import PremiumService
 
 
@@ -33,6 +33,9 @@ class UserManagementService:
 
     async def search_users(self, query: str) -> list[User]:
         return await self.users.search(query)
+
+    async def list_users(self, *, page: int = 1, per_page: int = 8, premium_only: bool = False, banned_only: bool = False) -> UserPage:
+        return await self.users.list_page(page=page, per_page=per_page, premium_only=premium_only, banned_only=banned_only)
 
     async def get_details(self, user_id: int) -> ManagedUserDetails | None:
         user = await self.users.get_details(user_id)

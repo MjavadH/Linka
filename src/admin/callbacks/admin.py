@@ -134,6 +134,10 @@ class AdminBroadcastCallback(CallbackData, prefix="admin_bc"):
 class AdminUserAction(StrEnum):
     SEARCH = "search"
     VIEW = "view"
+    LIST_ALL = "list_all"
+    LIST_PREMIUM = "list_premium"
+    LIST_BANNED = "list_banned"
+    NOOP = "noop"
     GRANT_PREMIUM = "grant_premium"
     GRANT_PLAN = "grant_plan"
     CUSTOM_PREMIUM = "custom_premium"
@@ -149,6 +153,7 @@ class AdminUserCallback(CallbackData, prefix="admin_user"):
     action: AdminUserAction
     user_id: int = 0
     plan_id: int = 0
+    page: int = 1
 
 class AdminAnalyticsAction(StrEnum):
     MENU = "menu"

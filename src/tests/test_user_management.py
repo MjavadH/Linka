@@ -214,3 +214,22 @@ def test_direct_messaging_delivers_only_selected_user() -> None:
         assert bot.sent == [(555, "hello")]
 
     asyncio.run(scenario())
+
+
+def test_user_management_lists_users_with_database_pagination_flags() -> None:
+    async def scenario() -> None:
+        class PagedUsers(FakeUsers):
+            def __init__(self) -> None:
+                super().__init__()
+                self.calls: list[dict[str, Any]] = []
+
+            async def list_page(self, **kwargs: Any) -> Any:
+                self.calls.append(kwargs)
+                return "page"
+
+        users = PagedUsers()
+        service = UserManagementService(cast(Any, users), cast(Any, FakeBans()), PremiumService(cast(Any, FakeSubscriptionRepo())))
+        assert await service.list_users(page=3, per_page=8, premium_only=True) == "page"
+        assert users.calls == [{"page": 3, "per_page": 8, "premium_only": True, "banned_only": False}]
+
+    asyncio.run(scenario())
