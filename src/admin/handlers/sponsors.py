@@ -19,11 +19,11 @@ from admin.callbacks import (
 )
 from admin.keyboards.navigation import navigation_row
 from admin.states.sponsors import AdminSponsorStates
-from repositories.sponsors import SponsorRepository
-from repositories.audit_logs import AuditLogRepository
-from services.audit_logs import AuditLogService
 from core.config import Settings
 from core.timezone import format_datetime
+from repositories.audit_logs import AuditLogRepository
+from repositories.sponsors import SponsorRepository
+from services.audit_logs import AuditLogService
 
 router = Router(name="admin_sponsors")
 INVITE_LINK_RE = re.compile(r"^https://(?:t\.me|telegram\.me)/(?:\+[A-Za-z0-9_-]+|joinchat/[A-Za-z0-9_-]+|[A-Za-z0-9_]{5,})(?:/)?$")

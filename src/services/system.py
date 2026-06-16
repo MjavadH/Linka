@@ -56,7 +56,11 @@ class SystemNotificationService:
 
 class HealthService:
     def __init__(self, *, bot: Bot, settings: Settings, session_factory: async_sessionmaker[AsyncSession] | None = None, session: AsyncSession | None = None, scheduler: object | None = None) -> None:
-        self.bot = bot; self.settings = settings; self.session_factory = session_factory; self.session = session; self.scheduler = scheduler
+        self.bot = bot
+        self.settings = settings
+        self.session_factory = session_factory
+        self.session = session
+        self.scheduler = scheduler
         self.last_report: HealthReport | None = None
 
     async def check(self) -> HealthReport:
@@ -124,11 +128,14 @@ async def validate_startup(*, bot: Bot, settings: Settings, session_factory: asy
         logger.info("timezone_configured", timezone=settings.timezone)
     except ValueError as exc:
         errors.append(str(exc))
-    if not settings.admin_telegram_ids: errors.append("ADMIN_TELEGRAM_IDS is required")
-    if settings.archive_chat_id is None: errors.append("ARCHIVE_CHAT_ID is required")
+    if not settings.admin_telegram_ids:
+        errors.append("ADMIN_TELEGRAM_IDS is required")
+    if settings.archive_chat_id is None:
+        errors.append("ARCHIVE_CHAT_ID is required")
     report = await HealthService(bot=bot, settings=settings, session_factory=session_factory, scheduler=scheduler).check()
     for status in [report.database, report.archive_channel, report.bot_api, report.scheduler]:
-        if not status.healthy: errors.append(f"{status.name}: {status.detail}")
+        if not status.healthy:
+            errors.append(f"{status.name}: {status.detail}")
     if errors:
         message = "; ".join(errors)
         logger.error("startup_validation_failed", errors=errors)

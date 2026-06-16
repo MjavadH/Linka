@@ -14,10 +14,10 @@ from admin.callbacks.admin import (
     AdminSection,
     AdminSponsorAction,
     AdminSponsorCallback,
-    AdminUserAction,
-    AdminUserCallback,
     AdminSystemAction,
     AdminSystemCallback,
+    AdminUserAction,
+    AdminUserCallback,
 )
 
 __all__ = [

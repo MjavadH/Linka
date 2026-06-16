@@ -6,6 +6,7 @@ from models.subscription import PremiumPlan
 from models.user import User
 from repositories.users import UserListItem, UserPage
 
+
 def user_management_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

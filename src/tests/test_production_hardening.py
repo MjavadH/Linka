@@ -2,12 +2,12 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+from core.config import Settings
 from models.audit_log import AuditLog
 from models.subscription import Subscription
 from repositories.audit_logs import AuditLogPage
 from services.audit_logs import AuditLogService
 from services.system import HealthService, SystemNotificationService, validate_startup
-from core.config import Settings
 
 
 class MemoryAuditRepo:
@@ -107,6 +107,9 @@ def test_startup_validation_fails_for_missing_critical_settings() -> None:
 
             async def send_message(self, chat_id: int, text: str) -> None:
                 pass
+
+            async def get_chat_member(self, chat_id: int, user_id: int) -> Any:
+                return type("Member", (), {"status": "administrator"})()
 
         settings = Settings(bot_token="1234567890:test-token", bot_username="linka_bot", database_url="postgresql+asyncpg://db")
         try:

@@ -13,7 +13,7 @@ from core.config import Settings
 from core.timezone import format_datetime
 from models.file import DeepLink
 from models.subscription import Subscription
-from repositories.audit_logs import AuditLogRepository
+from repositories.audit_logs import AuditLogPage, AuditLogRepository
 from services.audit_logs import TRACKED_AUDIT_ACTIONS, AuditLogService
 from services.system import HealthService
 
@@ -35,7 +35,8 @@ async def audit_logs(callback: CallbackQuery, session: AsyncSession, callback_da
 async def audit_detail(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback, settings: Settings) -> None:
     log = await AuditLogService(AuditLogRepository(session)).get(callback_data.log_id)
     if log is None:
-        await callback.answer("Audit log not found", show_alert=True); return
+        await callback.answer("Audit log not found", show_alert=True)
+        return
     text = ("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{format_datetime(log.created_at, settings.timezone)}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nUsername:\n@{log.admin_username or '-'}\n\n" f"Admin ID:\n{log.admin_user_id or '-'}\n\nAction:\n{log.action}\n\n" f"Target:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}")
     await _edit(callback, text, InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
 
@@ -54,7 +55,8 @@ async def receive_search_date(message: Message, state: FSMContext, session: Asyn
     try:
         day = datetime.strptime(message.text or "", "%Y/%m/%d").replace(tzinfo=UTC)
     except ValueError:
-        await message.answer("Invalid date. Use YYYY/MM/DD, for example 2026/06/13."); return
+        await message.answer("Invalid date. Use YYYY/MM/DD, for example 2026/06/13.")
+        return
     await state.clear()
     data = await AuditLogService(AuditLogRepository(session)).list_logs(page=1, per_page=8, day=day)
     await message.answer(_logs_text(data, settings.timezone), reply_markup=_logs_keyboard(data, day=day))
@@ -64,7 +66,8 @@ async def audit_search_date_results(callback: CallbackQuery, session: AsyncSessi
     try:
         day = datetime.strptime(callback_data.value, "%Y/%m/%d").replace(tzinfo=UTC)
     except ValueError:
-        await callback.answer("Invalid saved date", show_alert=True); return
+        await callback.answer("Invalid saved date", show_alert=True)
+        return
     await _show_logs(callback, session, settings, page=callback_data.page, day=day)
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_SEARCH_LOG_ID))
@@ -75,11 +78,13 @@ async def audit_search_log_id(callback: CallbackQuery, state: FSMContext) -> Non
 @router.message(AdminSystemStates.waiting_for_search_log_id, F.text)
 async def receive_search_log_id(message: Message, state: FSMContext, session: AsyncSession, settings: Settings) -> None:
     if not (message.text or "").strip().isdigit():
-        await message.answer("Log ID must be numeric."); return
+        await message.answer("Log ID must be numeric.")
+        return
     await state.clear()
     log = await AuditLogService(AuditLogRepository(session)).get(int((message.text or "").strip()))
     if log is None:
-        await message.answer("Audit log not found."); return
+        await message.answer("Audit log not found.")
+        return
     await message.answer(("📜 <b>Audit Log Details</b>\n\n" f"ID:\n#{log.id}\n\nDate:\n{format_datetime(log.created_at, settings.timezone)}\n\n" f"Admin:\n{log.admin_full_name or 'Unknown'}\n\nAction:\n{log.action}\n\nTarget:\n{log.target_type} {log.target_id or '-'}\n\nDetails:\n{log.details or '-'}"), reply_markup=InlineKeyboardMarkup(inline_keyboard=[[_btn("⬅️ Back To Logs", AdminSystemAction.AUDIT_LOGS)], [home_button()]]))
 
 @router.callback_query(AdminSystemCallback.filter(F.action == AdminSystemAction.AUDIT_FILTER))
@@ -141,9 +146,11 @@ async def maintenance(callback: CallbackQuery) -> None:
 async def maintenance_action(callback: CallbackQuery, session: AsyncSession, callback_data: AdminSystemCallback) -> None:
     await callback.answer("Running...")
     if callback_data.action == AdminSystemAction.VALIDATE_LINKS:
-        total = int(await session.scalar(select(func.count(DeepLink.id))) or 0); result = f"Validated {total} deep links."
+        total = int(await session.scalar(select(func.count(DeepLink.id))) or 0)
+        result = f"Validated {total} deep links."
     elif callback_data.action == AdminSystemAction.CLEANUP_EXPIRED:
-        res = await session.execute(delete(Subscription).where(Subscription.is_active.is_(True), Subscription.expires_at <= datetime.now(UTC)).returning(Subscription.id)); result = f"Cleaned {len(res.all())} expired subscriptions."
+        res = await session.execute(delete(Subscription).where(Subscription.is_active.is_(True), Subscription.expires_at <= datetime.now(UTC)).returning(Subscription.id))
+        result = f"Cleaned {len(res.all())} expired subscriptions."
     else:
         result = "Statistics recalculated successfully."
     await session.commit()
@@ -153,7 +160,7 @@ async def _show_logs(callback: CallbackQuery, session: AsyncSession, settings: S
     data = await AuditLogService(AuditLogRepository(session)).list_logs(page=page, per_page=8, admin_user_id=admin_user_id, action=action, day=day)
     await _edit(callback, _logs_text(data, settings.timezone), _logs_keyboard(data, admin_user_id=admin_user_id, action=action, day=day))
 
-def _logs_text(data, timezone: str = "UTC") -> str:
+def _logs_text(data: AuditLogPage, timezone: str = "UTC") -> str:
     if not data.items:
         return "📜 <b>Latest Audit Logs</b>\n\nNo logs found."
 
@@ -171,9 +178,10 @@ def _logs_text(data, timezone: str = "UTC") -> str:
 
     return "\n".join(lines)
     
-def _logs_keyboard(data, *, admin_user_id: int | None = None, action: str | None = None, day: datetime | None = None) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text=f"#{l.id}", callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_VIEW, log_id=l.id).pack()) for l in data.items[i:i+4]] for i in range(0, len(data.items), 4)]
-    start = 0 if data.total == 0 else (data.page - 1) * data.per_page + 1; end = min(data.total, data.page * data.per_page)
+def _logs_keyboard(data: AuditLogPage, *, admin_user_id: int | None = None, action: str | None = None, day: datetime | None = None) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=f"#{log.id}", callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_VIEW, log_id=log.id).pack()) for log in data.items[i:i+4]] for i in range(0, len(data.items), 4)]
+    start = 0 if data.total == 0 else (data.page - 1) * data.per_page + 1
+    end = min(data.total, data.page * data.per_page)
     rows.append([InlineKeyboardButton(text=f"Showing {start}-{end} of {data.total} logs", callback_data=AdminSystemCallback(action=AdminSystemAction.AUDIT_NOOP).pack())])
     nav=[]
     cb_action = AdminSystemAction.AUDIT_SEARCH_DATE_RESULTS if day else AdminSystemAction.AUDIT_FILTER_ACTION if action else AdminSystemAction.AUDIT_FILTER_ADMIN if admin_user_id else AdminSystemAction.AUDIT_LOGS
@@ -198,5 +206,6 @@ def _btn(text: str, action: AdminSystemAction) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=AdminSystemCallback(action=action).pack())
 
 async def _edit(callback: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup) -> None:
-    if isinstance(callback.message, Message): await callback.message.edit_text(text, reply_markup=reply_markup)
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(text, reply_markup=reply_markup)
     await callback.answer()

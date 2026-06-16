@@ -1,0 +1,12 @@
+admin
+bot
+core
+database
+handlers
+keyboards
+middlewares
+models
+repositories
+scheduler
+services
+utils

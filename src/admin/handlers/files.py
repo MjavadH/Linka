@@ -18,6 +18,8 @@ from admin.callbacks import (
     AdminSection,
 )
 from admin.keyboards import (
+    cancel_action_keyboard,
+    cancel_to_files_keyboard,
     content_type_keyboard,
     episode_detail_keyboard,
     episodes_list_keyboard,
@@ -30,8 +32,6 @@ from admin.keyboards import (
     series_list_keyboard,
     variant_edit_keyboard,
     variant_selection_keyboard,
-    cancel_to_files_keyboard,
-    cancel_action_keyboard,
 )
 from admin.states.files import AdminFileStates
 from core.config import Settings, get_settings
