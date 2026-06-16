@@ -112,11 +112,11 @@ Linka solves these problems with a single self-hosted bot.
   <img src="docs/images/Analytics.jpg" alt="Analytics" width="250">
 </a>
 
-### Audit Logs
+### System
 
-<a href="docs/images/Audit_Logs.jpg">
-  <img src="docs/images/Audit_Logs.jpg" alt="Audit Logs" width="250">
-</a>
+|                Audit Logs                 |                  Health Status                  |                 Maintenance                 |
+|:-----------------------------------------:|:-----------------------------------------------:|:-------------------------------------------:|
+| ![Audit_Logs](docs/images/Audit_Logs.jpg) | ![Health_Status](docs/images/Health_Status.jpg) | ![Maintenance](docs/images/Maintenance.jpg) |
 
 ---
 
