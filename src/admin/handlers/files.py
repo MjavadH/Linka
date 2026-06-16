@@ -34,7 +34,8 @@ from admin.keyboards import (
     cancel_action_keyboard,
 )
 from admin.states.files import AdminFileStates
-from core.config import Settings
+from core.config import Settings, get_settings
+from core.timezone import format_date
 from models.enums import StorageType
 from repositories.audit_logs import AuditLogRepository
 from repositories.files import (
@@ -334,7 +335,19 @@ async def finish_variant_registration(
     link = await DeepLinkService(DeepLinkRepository(session), settings.bot_username).get_or_create_for_variant(
         variant
     )
-    await _audit(session, callback.from_user, "Create Variant", "Variant", variant.id, await _variant_details(session, variant.id))
+    await _audit(
+        session,
+        callback.from_user,
+        "Create Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     await state.clear()
     if isinstance(callback.message, Message):
         await callback.message.edit_text(
@@ -469,10 +482,29 @@ async def edit_variant_quality(callback: CallbackQuery, callback_data: AdminFile
 async def save_variant_quality(message: Message, state: FSMContext, session: AsyncSession) -> None:
     data = await state.get_data()
     file_id = int(data["file_id"])
-    await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
-        int(data["variant_id"]), quality=_message_text(message).strip()
+    variant = await FileVariantService(
+        FileVariantRepository(session),
+        build_storage_service(cast(Bot, message.bot), None)
+    ).update_variant(
+        int(data["variant_id"]),
+        quality=_message_text(message).strip()
     )
-    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
+    if variant is None:
+        await message.answer("Variant not found.")
+        return
+    await _audit(
+        session,
+        message.from_user,
+        "Edit Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     await state.clear()
     await message.answer("✅ Variant quality updated.")
     if int(data.get("episode_id") or 0):
@@ -499,10 +531,25 @@ async def save_variant_premium(callback: CallbackQuery, session: AsyncSession) -
     file_id = int(parts[2])
     variant_id = int(parts[3])
     episode_id = int(parts[5]) if len(parts) > 5 and parts[5] else 0
-    await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, callback.bot), None)).update_variant(
+    variant = await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, callback.bot), None)).update_variant(
         variant_id, is_premium=parts[1] == "1"
     )
-    await _audit(session, callback.from_user, "Edit Variant", "Variant", variant_id, await _variant_details(session, variant_id))
+    if variant is None:
+        await callback.answer("Variant not found", show_alert=True)
+        return
+    await _audit(
+        session,
+        callback.from_user,
+        "Edit Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     if isinstance(callback.message, Message):
         if episode_id:
             await _edit_episode_detail_message(callback.message, episode_id, session)
@@ -534,10 +581,30 @@ async def save_variant_caption(message: Message, state: FSMContext, session: Asy
     data = await state.get_data()
     file_id = int(data["file_id"])
     caption = None if _message_text(message).strip() == "-" else _message_text(message)
-    await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
-        int(data["variant_id"]), caption=caption or "", caption_entities=_entities_to_json(message.entities)
+    variant = await FileVariantService(
+        FileVariantRepository(session),
+        build_storage_service(cast(Bot, message.bot), None)
+    ).update_variant(
+        int(data["variant_id"]),
+        caption=caption or "",
+        caption_entities=_entities_to_json(message.entities)
     )
-    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
+    if variant is None:
+        await message.answer("Variant not found.")
+        return
+    await _audit(
+        session,
+        message.from_user,
+        "Edit Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     await state.clear()
     await message.answer("✅ Variant caption updated.")
     if int(data.get("episode_id") or 0):
@@ -572,14 +639,29 @@ async def save_variant_storage(message: Message, state: FSMContext, session: Asy
     data = await state.get_data()
     file_id = int(data["file_id"])
     values = _parse_key_value_lines(_message_text(message))
-    await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
+    variant = await FileVariantService(FileVariantRepository(session), build_storage_service(cast(Bot, message.bot), None)).update_variant(
         int(data["variant_id"]),
         storage_key=values.get("storage_key"),
         telegram_file_id=values.get("telegram_file_id"),
         archive_chat_id=_optional_int(values.get("archive_chat_id")),
         archive_message_id=_optional_int(values.get("archive_message_id")),
     )
-    await _audit(session, message.from_user, "Edit Variant", "Variant", int(data["variant_id"]), await _variant_details(session, int(data["variant_id"])))
+    if variant is None:
+        await message.answer("Variant not found.")
+        return
+    await _audit(
+        session,
+        message.from_user,
+        "Edit Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     await state.clear()
     await message.answer("✅ Storage metadata updated.")
     if int(data.get("episode_id") or 0):
@@ -610,7 +692,19 @@ async def delete_variant(callback: CallbackQuery, callback_data: AdminFileCallba
     if variant is None:
         await callback.answer("Variant not found", show_alert=True)
         return
-    await _audit(session, callback.from_user, "Delete Variant", "Variant", variant.id, await _variant_details_from_obj(variant))
+    await _audit(
+        session,
+        callback.from_user,
+        "Delete Variant",
+        "Variant",
+        variant.id,
+        _variant_audit_snapshot(
+            file_id=variant.file_id,
+            variant_id=variant.id,
+            quality=variant.quality,
+            is_premium=variant.is_premium,
+        ),
+    )
     if isinstance(callback.message, Message):
         if callback_data.episode_id:
             await _edit_episode_detail_message(callback.message, callback_data.episode_id, session)
@@ -836,7 +930,7 @@ async def _send_file_detail(callback: CallbackQuery, file_id: int, session: Asyn
             f"📄 <b>{escape(file.title)}</b>\n\n"
             f"Download count: <b>{download_count}</b>\n"
             f"Description/caption: <blockquote>{escape(file.description or '—')}</blockquote>\n"
-            f"Created: <b>{file.created_at:%Y-%m-%d}</b>\n\n"
+            f"Created: <b>{format_date(file.created_at, get_settings().timezone)}</b>\n\n"
             f"<b>Variants</b>\n{variants}",
             reply_markup=file_detail_keyboard(file.id),
         )
@@ -874,7 +968,7 @@ def _series_list_text(rows: list[SeriesListItem], total: int, page: int, search:
     for item in rows:
         lines.extend([
             f"<b>{escape(item.series.name)}</b>",
-            f"Episodes: {item.episode_count} • Created: {item.series.created_at:%Y-%m-%d}",
+            f"Episodes: {item.episode_count} • Created: {format_date(item.series.created_at, get_settings().timezone)}",
             "",
         ])
     return "\n".join(lines)
@@ -932,7 +1026,7 @@ def _series_detail_text(series: Any) -> str:
     return (
         f"📺 <b>{escape(series.name)}</b>\n\n"
         f"Episode Count: <b>{episode_count}</b>\n"
-        f"Created Date: <b>{series.created_at:%Y-%m-%d}</b>"
+        f"Created Date: <b>{format_date(series.created_at, get_settings().timezone)}</b>"
     )
 
 
@@ -992,7 +1086,7 @@ def _file_list_text(rows: list[FileListItem], total: int, page: int, search: str
         lines.extend(
             [
                 f"<b>{escape(item.file.title)}</b>",
-                f"Variants: {item.variant_count} • Downloads: {item.download_count} • Created: {item.file.created_at:%Y-%m-%d}",
+                f"Variants: {item.variant_count} • Downloads: {item.download_count} • Created: {format_date(item.file.created_at, get_settings().timezone)}",
                 "",
             ]
         )
@@ -1075,7 +1169,7 @@ def _file_detail_text(file: Any, download_count: int) -> str:
         f"📄 <b>{escape(file.title)}</b>\n\n"
         f"Download count: <b>{download_count}</b>\n"
         f"Description/caption: <blockquote>{escape(file.description or '—')}</blockquote>\n"
-        f"Created: <b>{file.created_at:%Y-%m-%d}</b>\n\n"
+        f"Created: <b>{format_date(file.created_at, get_settings().timezone)}</b>\n\n"
         f"<b>Variants</b>\n{variants}"
     )
 
@@ -1112,17 +1206,41 @@ def _optional_int(value: str | None) -> int | None:
 async def _audit(session: AsyncSession, admin: Any, action: str, target_type: str, target_id: int | None, details: str | None) -> None:
     await AuditLogService(AuditLogRepository(session)).record(admin=admin, action=action, target_type=target_type, target_id=target_id, details=details)
 
-async def _variant_details(session: AsyncSession, variant_id: int) -> str:
-    variant = await FileVariantRepository(session).get_by_id(variant_id)
-    return await _variant_details_from_obj(variant) if variant is not None else str(variant_id)
+def _variant_audit_snapshot(
+    *,
+    file_title: str | None = None,
+    series_name: str | None = None,
+    episode_number: int | None = None,
+    quality: str | None = None,
+    is_premium: bool = False,
+    file_id: int | None = None,
+    variant_id: int | None = None,
+) -> str:
+    lines: list[str] = []
 
-async def _variant_details_from_obj(variant: Any) -> str:
-    title = getattr(getattr(variant, "file", None), "title", None) or f"File {getattr(variant, 'file_id', '')}"
-    episode = getattr(variant, "episode", None)
-    if episode is not None:
-        series = getattr(episode, "series", None)
-        title = f"{getattr(series, 'name', title)} Episode {getattr(episode, 'number', '')}"
-    return f"{title}\n{getattr(variant, 'quality', '')}{' Premium' if getattr(variant, 'is_premium', False) else ''}"
+    if file_title:
+        lines.append(f"File: {file_title}")
+
+    if series_name:
+        episode_text = (
+            f"{series_name} Episode {episode_number}"
+            if episode_number is not None
+            else series_name
+        )
+        lines.append(f"Series: {episode_text}")
+
+    if file_id is not None:
+        lines.append(f"File ID: {file_id}")
+
+    if variant_id is not None:
+        lines.append(f"Variant ID: {variant_id}")
+
+    if quality:
+        lines.append(f"Quality: {quality}")
+
+    lines.append(f"Premium: {'Yes' if is_premium else 'No'}")
+
+    return "\n".join(lines)
 
 async def _episode_details(session: AsyncSession, episode_id: int) -> str:
     episode = await EpisodeRepository(session).get_by_id(episode_id)
