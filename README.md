@@ -108,15 +108,25 @@ Linka solves these problems with a single self-hosted bot.
 
 ### Analytics
 
-<a href="docs/images/Analytics.jpg">
-  <img src="docs/images/Analytics.jpg" alt="Analytics" width="250">
-</a>
+
+|                        Analytics                        |                      Overview Report                      |
+|:-------------------------------------------------------:|:---------------------------------------------------------:|
+|         ![Analytics](docs/images/Analytics.jpg)         |    ![Overview_Report](docs/images/Overview_Report.jpg)    |
+|                    Premium Analytics                    |                    Download Analytics                     |
+| ![Premium_Analytics](docs/images/Premium_Analytics.jpg) | ![Download_Analytics](docs/images/Download_Analytics.jpg) |
+|                    Sponsor Analytics                    |                     Broadcast Reports                     |
+| ![Sponsor_Analytics](docs/images/Sponsor_Analytics.jpg) |  ![Broadcast_Reports](docs/images/Broadcast_Reports.jpg)  |
+|                     User Analytics                      |                     Series Analytics                      |
+|    ![User_Analytics](docs/images/User_Analytics.jpg)    |   ![Series_Analytics](docs/images/Series_Analytics.jpg)   |
+|                       And More...                       |
 
 ### System
 
-|                Audit Logs                 |                  Health Status                  |                 Maintenance                 |
-|:-----------------------------------------:|:-----------------------------------------------:|:-------------------------------------------:|
-| ![Audit_Logs](docs/images/Audit_Logs.jpg) | ![Health_Status](docs/images/Health_Status.jpg) | ![Maintenance](docs/images/Maintenance.jpg) |
+|                     System                      |                 Audit Logs                  |
+|:-----------------------------------------------:|:-------------------------------------------:|
+|        ![System](docs/images/System.jpg)        |  ![Audit_Logs](docs/images/Audit_Logs.jpg)  |
+|                  Health Status                  |                 Maintenance                 |
+| ![Health_Status](docs/images/Health_Status.jpg) | ![Maintenance](docs/images/Maintenance.jpg) |
 
 ---
 
