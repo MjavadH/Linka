@@ -5,9 +5,17 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
-from keyboards.premium import payment_method_keyboard, plan_selection_keyboard
+from keyboards.premium import (
+    account_subscription_keyboard,
+    payment_method_keyboard,
+    plan_selection_keyboard,
+)
 from repositories.premium import PremiumPlanRepository
 from repositories.settings import SettingsRepository
+from repositories.subscriptions import SubscriptionRepository
+from repositories.users import UserRepository
+from services.accounts import AccountService, format_account_info
+from services.premium import PremiumService
 from services.settings import PremiumSettingsService
 
 router = Router(name="premium")
@@ -30,6 +38,22 @@ async def show_plan_selection(message: Message, session: AsyncSession) -> None:
         if plan.description:
             lines.extend([plan.description, ""])
     await message.answer("\n".join(lines).strip(), reply_markup=plan_selection_keyboard(plans))
+
+
+@router.message(F.text == "👤 My Account")
+async def my_account(message: Message, session: AsyncSession, settings: Settings) -> None:
+    if message.from_user is None:
+        return
+    user = await UserRepository(session).upsert_from_telegram(
+        telegram_id=message.from_user.id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+    )
+    account = await AccountService(PremiumService(SubscriptionRepository(session)), settings.timezone).get_account_info(user)
+    await message.answer(
+        format_account_info(account),
+        reply_markup=account_subscription_keyboard(account.is_premium_active),
+    )
 
 
 @router.message(F.text == "⭐ Buy Subscription")

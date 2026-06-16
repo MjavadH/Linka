@@ -88,7 +88,13 @@ async def start_with_deep_link(
         )
     elif result.reason == "premium_required":
         await message.answer(
-            "⭐ <b>Premium Required</b>\n\nThis file is available only for premium users.",
+            "⭐ <b>Premium Required</b>\n\n"
+            "This file is available only to premium members.\n\n"
+            "<b>Premium Benefits:</b>\n\n"
+            "• Access premium-only content\n\n"
+            "• Access premium-only quality variants\n\n"
+            "• No sponsor requirements\n\n"
+            "Choose a subscription plan to continue.",
             reply_markup=premium_required_keyboard(),
         )
     else:

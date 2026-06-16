@@ -36,7 +36,7 @@ def setup_scheduler(
 
     async def run_premium_expiration() -> None:
         async with session_factory() as session:
-            await PremiumExpirationJob(bot, session).run()
+            await PremiumExpirationJob(bot, session, settings).run()
 
     async def run_user_ban_expiration() -> None:
         async with session_factory() as session:

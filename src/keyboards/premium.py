@@ -7,6 +7,19 @@ def premium_required_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⭐ Buy Subscription", callback_data="premium:plans")]])
 
 
+def account_subscription_keyboard(is_premium_active: bool) -> InlineKeyboardMarkup:
+    text = "⭐ Extend Subscription" if is_premium_active else "⭐ Buy Subscription"
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, callback_data="premium:plans")]])
+
+
+def renewal_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⭐ Renew Subscription", callback_data="premium:plans")]])
+
+
+def expired_subscription_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⭐ Buy Subscription", callback_data="premium:plans")]])
+
+
 def plan_selection_keyboard(plans: list[PremiumPlan]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
