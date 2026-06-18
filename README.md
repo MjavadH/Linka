@@ -106,6 +106,13 @@ Linka solves these problems with a single self-hosted bot.
 
 ![Movie Creation](docs/images/movie-creation.gif)
 
+### File Delivery And Auto Deletion Flow
+
+![File_Delivery](docs/images/File_Delivery.gif)
+
+### Admin Panel
+![Admin_Panel](docs/images/Admin_Panel.jpg)
+
 ### Analytics
 
 
